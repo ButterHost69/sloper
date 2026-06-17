@@ -1,0 +1,35 @@
+# What is it ?
+---
+Orchestrates Agents for a github repo.
+It works by having Github as the Central Service, and everything revolves around it.
+
+What can it do ?
+    - Can Spec out Issues (provide more structure to the gh issue)
+    - Write a working solution
+    - Creates PRs
+    - Reviews PRs
+    - Merges PRs
+
+It is very similar to nexu-io/looper but is way more transparent.
+
+
+TODO:
+- [ ] Make a queing system that fetches the following from gh:
+    - New GH issues
+    - New Comments on GH issues
+    - New Comments / PRs / Reviews from GH PRs
+
+- [ ] Implement an Admin Dashboard that shows everything
+    - Currently Queued Tasks
+    - Each stage of the task (in some DAG form)
+    - Errors occured by agents, when solving the issue
+    - The tradeoffs made by the agent
+
+- [ ] Create a chain of "task" ; EG: SPEC -> WORK -> REVIEW -> LOOP (if needed) -> MERGE
+
+- [ ] 
+
+In the Distant Future
+- [ ] Some memory system, project level and branch level - when back and forth during reviews
+- [ ] Head and Headless Mode, for things that require UI interaction
+    - Let the Agent Decide the best option
