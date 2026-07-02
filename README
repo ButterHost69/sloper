@@ -13,6 +13,17 @@ What can it do ?
 It is very similar to nexu-io/looper but is way more transparent.
 
 
+STRUCTURE: 
+    1. Web-App : Complete Admin Side - with all the visibility and all
+    2. SQLITE DB : a sqlite db contains all meta-data and stuff
+    3. Sloper
+        3. Coordinator - Fetches Tasks and adds to a sqlite db ; and Initiates Workers
+        4. Initiates Workers ; Reiviewers ; Fixers ; Mergers
+    
+        5. Right now let it be like the looper original, all running on the machine directly
+            - Will containerize and stuff later - maybe make use of it only during some testing sort of thing
+
+
 TODO:
 - [ ] Make a queing system that fetches the following from gh:
     - New GH issues
@@ -26,6 +37,9 @@ TODO:
     - The tradeoffs made by the agent
 
 - [ ] Create a chain of "task" ; EG: SPEC -> WORK -> REVIEW -> LOOP (if needed) -> MERGE
+
+- [ ] Workers can request access to another Docker machine / image to run/test the application, figure out a way to do it 
+    - Maybe make it talk to some controller / coordinator
 
 - [ ] 
 
