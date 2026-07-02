@@ -37,6 +37,10 @@ func Run(ctx context.Context, options models.ShellOptions) (models.ShellResult, 
 		cmd.Env = mapEnv(options.Env)
 	}
 
+	if options.Stdin != "" {
+		cmd.Stdin = strings.NewReader(options.Stdin)
+	}
+
 	stdOutBuffer := models.NewBoundedBuffer(maxCapturedBytes)
 	stdErrBuffer := models.NewBoundedBuffer(maxCapturedBytes)
 
@@ -61,24 +65,24 @@ func Run(ctx context.Context, options models.ShellOptions) (models.ShellResult, 
 		terminatOnce     sync.Once
 	)
 
-	terminateFunc := func(){
+	terminateFunc := func() {
 		terminatOnce.Do(func() {
 			if cmd.Process == nil {
-				return 
+				return
 			}
 
-			if err := cmd.Process.Signal(syscall.SIGTERM) ; err != nil && !isProcessDone(err){
+			if err := cmd.Process.Signal(syscall.SIGTERM); err != nil && !isProcessDone(err) {
 				_ = cmd.Process.Kill()
 				return
 			}
 
 			if gracefulShutdown <= 0 {
 				_ = cmd.Process.Kill()
-				return		
+				return
 			}
 
 			killAt = time.After(gracefulShutdown)
-		})	
+		})
 	}
 
 	if options.Timeout > 0 {
@@ -88,18 +92,18 @@ func Run(ctx context.Context, options models.ShellOptions) (models.ShellResult, 
 	waiting := true
 	for waiting {
 		select {
-		case waitErr = <- waitCh:
+		case waitErr = <-waitCh:
 			waiting = false
-		case <- terminationStart:
+		case <-terminationStart:
 			timedOut = true
 			terminationStart = nil
 			terminateFunc()
-		case <- killAt :
+		case <-killAt:
 			killAt = nil
 			if cmd.Process != nil {
 				_ = cmd.Process.Kill()
 			}
-		case <- ctx.Done():
+		case <-ctx.Done():
 			if canceledErr == nil {
 				canceledErr = ctx.Err()
 				terminateFunc()
@@ -108,11 +112,11 @@ func Run(ctx context.Context, options models.ShellOptions) (models.ShellResult, 
 	}
 
 	duration := time.Since(startedTime)
-	result := models.ShellResult {
-		ExitCode: exitCode(cmd),
-		Stdout: stdOutBuffer.String(),
-		Stderr: stdErrBuffer.String(),
-		Duration: duration,
+	result := models.ShellResult{
+		ExitCode:   exitCode(cmd),
+		Stdout:     stdOutBuffer.String(),
+		Stderr:     stdErrBuffer.String(),
+		Duration:   duration,
 		DurationMS: duration.Milliseconds(),
 	}
 
@@ -122,7 +126,7 @@ func Run(ctx context.Context, options models.ShellOptions) (models.ShellResult, 
 		return result, &models.ShellCommandExecutionError{Message: "Command Timed Out", Result: result}
 	}
 
-	if canceledErr != nil{
+	if canceledErr != nil {
 		return result, canceledErr
 	}
 
@@ -131,7 +135,7 @@ func Run(ctx context.Context, options models.ShellOptions) (models.ShellResult, 
 	}
 
 	if waitErr != nil {
-		return result, waitErr	
+		return result, waitErr
 	}
 
 	return result, nil

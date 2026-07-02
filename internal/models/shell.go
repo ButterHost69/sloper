@@ -26,8 +26,8 @@ type ShellOptions struct {
 	Timeout          time.Duration
 	GracefulShutdown time.Duration
 
-	MaxCapturedBytes int // Will be needed for truncating agents outputs
-	// Stdin            string 		** Not sure where needed ** TODO: REMOVE THIS IF NOT IN USE AFTER SOME TIME
+	MaxCapturedBytes int    // Will be needed for truncating agents outputs
+	Stdin            string // Used to pass inputs in an executed process
 }
 
 type ShellCommandExecutionError struct {
@@ -50,15 +50,15 @@ func NewBoundedBuffer(limit int) *BoundedBuffer {
 	}
 }
 
-func (b *BoundedBuffer) Write(data []byte) (int,error) {
+func (b *BoundedBuffer) Write(data []byte) (int, error) {
 	// NOTE: need return error - because this is an io.writer alternative
 
 	if len(b.data) >= b.limit {
 		return 0, nil
 	}
-	
+
 	remaining := b.limit - len(b.data)
-	if len(data) > remaining{
+	if len(data) > remaining {
 		data = data[:remaining]
 	}
 
