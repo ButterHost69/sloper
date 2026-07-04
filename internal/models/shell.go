@@ -36,8 +36,9 @@ type ShellCommandExecutionError struct {
 }
 
 type BoundedBuffer struct {
-	data  []byte
-	limit int
+	data      []byte
+	limit     int
+	Truncated bool
 }
 
 func NewBoundedBuffer(limit int) *BoundedBuffer {
@@ -51,15 +52,15 @@ func NewBoundedBuffer(limit int) *BoundedBuffer {
 }
 
 func (b *BoundedBuffer) Write(data []byte) (int, error) {
-	// NOTE: need return error - because this is an io.writer alternative
-
-	if len(b.data) >= b.limit {
-		return 0, nil
+	// NOTE: need to return error(even though always `nil`) - because this is an io.writer alternative
+	if len(b.data) >= b.limit || b.Truncated {
+		return 0, nil // if buffer is already full, than return 0 (as no bytes written)
 	}
 
 	remaining := b.limit - len(b.data)
 	if len(data) > remaining {
 		data = data[:remaining]
+		b.Truncated = true
 	}
 
 	b.data = append(b.data, data...)
