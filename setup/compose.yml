@@ -1,0 +1,6 @@
+services:
+  looper-service:
+    build:
+      dockerfile: Dockerfile
+    env_file:
+      - .env

@@ -10,7 +10,7 @@ What can it do ?
     - Reviews PRs
     - Merges PRs
 
-It is very similar to nexu-io/looper but is way more transparent.
+It is heavily inspired from nexu-io/looper but is meant to be more transparent and flexible.
 
 
 STRUCTURE: 
