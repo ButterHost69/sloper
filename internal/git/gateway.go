@@ -155,3 +155,17 @@ func (g *GitGateway) runGitResultOnce(ctx context.Context, opts models.GitRunOpt
 		Cause:  err,
 	}
 }
+
+func (g *GitGateway) DetectGitHubRepo(ctx context.Context, repoPath string) (string, error) {
+	opts := models.GitRunOptions{
+		Cwd: repoPath,
+		Env: nil,
+		Args: []string{"config", "--get", "remote.origin.url"},
+	}
+	result, err := g.runGitResult(ctx, opts)
+	if err != nil {
+		return "", err
+	}
+
+	return parseGitHubRepoFromRemoteURL(strings.TrimSpace(result.Result.Stdout)), nil
+}

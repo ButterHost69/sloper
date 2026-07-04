@@ -3,6 +3,7 @@
 Orchestrates Agents for a github repo.
 It works by having Github as the Central Service, and everything revolves around it.
 
+
 What can it do ?
     - Can Spec out Issues (provide more structure to the gh issue)
     - Write a working solution
@@ -15,6 +16,8 @@ It is heavily inspired from nexu-io/looper but is meant to be more transparent a
 
 STRUCTURE: 
     1. Web-App : Complete Admin Side - with all the visibility and all
+                - Plug and play extension (agent)
+                - Plug and play loops, set conditions for them and more 
     2. SQLITE DB : a sqlite db contains all meta-data and stuff
     3. Sloper
         3. Coordinator - Fetches Tasks and adds to a sqlite db ; and Initiates Workers
@@ -47,3 +50,8 @@ In the Distant Future
 - [ ] Some memory system, project level and branch level - when back and forth during reviews
 - [ ] Head and Headless Mode, for things that require UI interaction
     - Let the Agent Decide the best option
+
+- [ ] Allows one to write custom / semi-automated / automated loops.
+- [ ] Easily Find loops made by others, from a marketplace or such.
+- [ ] Loops for Performance, UI and more 
+- [ ] Finds Issue, uses these loops to solve them(picks the best loop by itself).

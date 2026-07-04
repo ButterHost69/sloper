@@ -100,4 +100,32 @@ func firstNonNil(values ...any) any {
 	return nil
 }
 
-	
+func splitRepoHostname(repo string) (string, string) {
+	parts := strings.Split(strings.TrimSpace(repo), "/")
+	if len(parts) == 3 && strings.TrimSpace(parts[0]) != "" {
+		return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]) + "/" + strings.TrimSpace(parts[2])
+	}
+	return "", strings.TrimSpace(repo)
+}
+
+func extractCommentInfos(value any) []models.CommentInfo {
+	items := utils.ToObjectSlice(value)
+	if len(items) == 0 {
+		if rows, ok := value.([]map[string]any); ok {
+			items = append(items, rows...)
+		}
+	}
+	out := make([]models.CommentInfo, 0, len(items))
+	for _, row := range items {
+		out = append(out, models.CommentInfo{
+			ID:                utils.AsInt64(firstNonNil(row["id"], row["databaseId"])),
+			Author:            extractAuthor(firstNonNil(row["author"], row["user"])),
+			AuthorAssociation: utils.FirstNonEmpty(utils.AsString(row["authorAssociation"]), utils.AsString(row["author_association"])),
+			Body:              utils.AsString(row["body"]),
+			CreatedAt:         utils.FirstNonEmpty(utils.AsString(row["createdAt"]), utils.AsString(row["created_at"])),
+			UpdatedAt:         utils.FirstNonEmpty(utils.AsString(row["updatedAt"]), utils.AsString(row["updated_at"])),
+			URL:               utils.FirstNonEmpty(utils.AsString(row["url"]), utils.AsString(row["html_url"])),
+		})
+	}
+	return out
+}
