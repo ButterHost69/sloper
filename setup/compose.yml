@@ -4,3 +4,10 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    volumes:
+      - sloper_data:/root/.sloper
+      - sloper_repo:/root/repo
+
+volumes:
+  sloper_data:
+  sloper_repo:

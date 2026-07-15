@@ -2,54 +2,62 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/ButterHost69/sloper/internal/logger"
 	"github.com/ButterHost69/sloper/internal/models"
+	"go.uber.org/zap"
 )
 
-// AgentGateway is the high-level interface to the pi-coding-agent.
-//
-// Phase 1 (Variant B): each call to RunStage spawns a fresh pi --mode rpc
-// process, sends one prompt, collects the response, and shuts down.
-//
-// Phase 2 (Variant C): keep a single rpcClient alive across multiple
-// RunStage calls for session continuity.  Achieved by adding Start/Stop
-// methods that hold a persistent client.
 type AgentGateway struct {
 	opts models.AgentOptions
-
-	// ── Variant C fields (unused in Phase 1) ──
-	// client *rpcClient // set by Start(); nil in Variant B
 }
 
-// NewAgentGateway creates an agent gateway with the given options.
 func NewAgentGateway(opts models.AgentOptions) *AgentGateway {
 	if opts.BinaryPath == "" {
 		opts.BinaryPath = "pi"
 	}
 	if opts.Timeout == 0 {
-		opts.Timeout = 10 * time.Minute // generous default for coding tasks
+		opts.Timeout = 10 * time.Minute
 	}
 	return &AgentGateway{opts: opts}
 }
 
-// ─── Variant B: one-shot per stage ──────────────────────────────────
-
-// StageOutput holds the collected text from a single agent run.
 type StageOutput struct {
-	Text     string // accumulated text_delta content
-	Thinking string // accumulated thinking_delta content (if any)
+	Text     string
+	Thinking string
 }
 
-// RunStage spawns pi, sends one prompt, streams events until settled,
-// then kills the process.  Returns the collected assistant text.
 func (g *AgentGateway) RunStage(ctx context.Context, prompt string) (*StageOutput, error) {
+	return g.RunStageWithCWD(ctx, prompt, "", "")
+}
+
+func (g *AgentGateway) RunStageWithCWD(ctx context.Context, prompt, cwdOverride, sessionID string) (*StageOutput, error) {
+	log := logger.Default()
+
 	stageCtx, cancel := context.WithTimeout(ctx, g.opts.Timeout)
 	defer cancel()
 
-	client, err := newRPCClient(stageCtx, g.opts)
+	opts := g.opts
+	if cwdOverride != "" {
+		opts.CWD = cwdOverride
+	}
+	if sessionID != "" {
+		opts.SessionID = sessionID
+	}
+
+	log.Info("agent: starting pi process",
+		zap.String("binary", opts.BinaryPath),
+		zap.String("cwd", opts.CWD),
+		zap.String("model", opts.Model),
+		zap.String("provider", opts.Provider),
+		zap.String("session_id", opts.SessionID),
+		zap.Bool("has_api_key", opts.APIKey != ""))
+
+	client, err := newRPCClient(stageCtx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("agent: start: %w", err)
 	}
@@ -62,75 +70,168 @@ func (g *AgentGateway) RunStage(ctx context.Context, prompt string) (*StageOutpu
 		return nil, fmt.Errorf("agent: send prompt: %w", err)
 	}
 
+	log.Info("agent: prompt accepted, waiting for response...")
 	return collectUntilSettled(stageCtx, events, client.Done())
 }
 
-// collectUntilSettled reads events until agent_settled, the context is
-// cancelled, or the pi process dies.  Accumulates text and thinking.
 func collectUntilSettled(
 	ctx context.Context,
 	events <-chan models.AgentEvent,
 	done <-chan struct{},
 ) (*StageOutput, error) {
+	log := logger.Default()
 	var text, thinking strings.Builder
+	var messageEndText string
+	var sawSettled bool
+	var eventCount int
 
 	for {
 		select {
 		case evt, ok := <-events:
 			if !ok {
-				// channel closed without settled → process died
+				log.Warn("agent: event channel closed before settled",
+					zap.Int("events_seen", eventCount),
+					zap.Int("text_len", text.Len()))
 				return &StageOutput{Text: text.String(), Thinking: thinking.String()},
 					fmt.Errorf("agent: pi process exited unexpectedly")
 			}
+			eventCount++
+
+			log.Debug("agent: event",
+				zap.Int("n", eventCount),
+				zap.String("type", evt.Type),
+				zap.Bool("is_text_delta", evt.IsTextDelta()),
+				zap.Bool("is_settled", evt.IsSettled()),
+				zap.Bool("is_error", evt.IsError || evt.Error != ""))
+
+			switch evt.Type {
+			case "agent_start", "turn_start", "turn_end", "agent_end", "agent_settled":
+				log.Info("agent: " + evt.Type)
+				if evt.Type == "agent_end" && evt.WillRetry {
+					log.Info("agent: will_retry")
+				}
+			case "message_start":
+				if evt.Message != nil {
+					log.Info("agent: message_start", zap.String("role", evt.Message.Role))
+				}
+			case "message_end":
+				if evt.Message != nil {
+					log.Info("agent: message_end",
+						zap.String("role", evt.Message.Role),
+						zap.String("stop_reason", evt.Message.StopReason))
+					if evt.Message.Role == "assistant" {
+						msgText := extractMessageText(evt.Message)
+						if msgText != "" {
+							log.Warn("agent: assistant message_end text",
+								zap.String("stop_reason", evt.Message.StopReason),
+								zap.String("text", truncate(msgText, 2000)))
+							if text.Len() == 0 {
+								messageEndText = msgText
+							}
+						}
+						if evt.Message.StopReason == "error" {
+							evtJSON, _ := json.Marshal(evt)
+							log.Error("agent: assistant error — raw event",
+								zap.String("raw", string(evtJSON)))
+							if evt.Error != "" && messageEndText == "" {
+								messageEndText = evt.Error
+							}
+						}
+					}
+				}
+			}
+
+			// Capture streaming text deltas
 			if evt.IsTextDelta() {
 				text.WriteString(evt.TextDelta())
 			}
+			// Capture thinking deltas
 			if evt.Type == "message_update" &&
 				evt.AssistantMessageEvent != nil &&
 				evt.AssistantMessageEvent.Type == "thinking_delta" {
 				thinking.WriteString(evt.AssistantMessageEvent.Delta)
 			}
-			if evt.IsSettled() {
-				return &StageOutput{Text: text.String(), Thinking: thinking.String()}, nil
+			// Log errors from events
+			if evt.IsError || evt.Error != "" {
+				log.Error("agent: error event",
+					zap.String("type", evt.Type),
+					zap.String("error", evt.Error))
 			}
+			// Settled = agent is done
+			if evt.IsSettled() {
+				sawSettled = true
+				finalText := text.String()
+				if finalText == "" && messageEndText != "" {
+					finalText = messageEndText
+				}
+				log.Info("agent: settled",
+					zap.Int("events_seen", eventCount),
+					zap.Int("text_len", len(finalText)),
+					zap.Int("thinking_len", thinking.Len()))
+				return &StageOutput{Text: finalText, Thinking: thinking.String()}, nil
+			}
+
 		case <-ctx.Done():
+			log.Warn("agent: context cancelled",
+				zap.Int("events_seen", eventCount),
+				zap.Int("text_len", text.Len()),
+				zap.Bool("saw_settled", sawSettled))
 			return &StageOutput{Text: text.String(), Thinking: thinking.String()}, ctx.Err()
+
 		case <-done:
+			log.Warn("agent: process done channel closed",
+				zap.Int("events_seen", eventCount),
+				zap.Int("text_len", text.Len()),
+				zap.Bool("saw_settled", sawSettled))
 			return &StageOutput{Text: text.String(), Thinking: thinking.String()},
 				fmt.Errorf("agent: pi process exited before settled")
 		}
 	}
 }
 
-// ─── Variant C: persistent session (Phase 2) ────────────────────────
+func extractMessageText(msg *models.AgentMessage) string {
+	if msg == nil {
+		return ""
+	}
+	var parts []string
+	for _, part := range msg.Content {
+		if part.Type == "text" && part.Text != "" {
+			parts = append(parts, part.Text)
+		}
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, "\n")
+	}
+	// Content is empty — for errors, marshal the whole message as fallback
+	if msg.StopReason == "error" {
+		if b, err := json.Marshal(msg); err == nil {
+			return string(b)
+		}
+	}
+	return ""
+}
 
-// Start begins a persistent pi session.  Subsequent calls to RunStagePersist
-// reuse the same process.
+func truncate(s string, max int) string {
+	if len(s) > max {
+		return s[:max] + "..."
+	}
+	return s
+}
+
 func (g *AgentGateway) Start(ctx context.Context) error {
-	// Phase 2 — not yet implemented.
 	return nil
 }
 
-// RunStagePersist sends a prompt on the persistent session.  Requires
-// Start() to have been called first.
 func (g *AgentGateway) RunStagePersist(ctx context.Context, prompt string) (*StageOutput, error) {
-	// Phase 2 — not yet implemented.
 	return nil, fmt.Errorf("not implemented: use RunStage (one-shot) for now")
 }
 
-// Steer queues a steering message on the persistent session.
 func (g *AgentGateway) Steer(ctx context.Context, msg string) error {
-	// Phase 2.
 	return fmt.Errorf("not implemented")
 }
 
-// Abort cancels the in-flight LLM call on the persistent session.
 func (g *AgentGateway) Abort() error {
-	// Phase 2.
 	return fmt.Errorf("not implemented")
 }
 
-// Stop gracefully shuts down the persistent session.
-func (g *AgentGateway) Stop() {
-	// Phase 2.
-}
+func (g *AgentGateway) Stop() {}

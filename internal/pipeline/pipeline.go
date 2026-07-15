@@ -10,16 +10,10 @@ import (
 	"github.com/ButterHost69/sloper/internal/models"
 )
 
-// Pipeline runs the SPEC → WORK → REVIEW → FIX → MERGE chain.
-//
-// It composes the low-level AgentGateway (RPC transport) with stage-level
-// prompt templates and response parsers so the scheduler can treat each
-// stage as a single function call.
 type Pipeline struct {
 	ag *agent.AgentGateway
 }
 
-// New creates a Pipeline backed by the given agent gateway.
 func New(ag *agent.AgentGateway) *Pipeline {
 	return &Pipeline{ag: ag}
 }
@@ -27,8 +21,9 @@ func New(ag *agent.AgentGateway) *Pipeline {
 // ─── Stage operations ───────────────────────────────────────────────
 
 // SpecIssue runs the SPEC stage: analyzes an issue and produces a plan.
-func (p *Pipeline) SpecIssue(ctx context.Context, issue models.IssueDetail) (*models.SpecResult, error) {
-	out, err := p.ag.RunStage(ctx, buildSpecPrompt(issue))
+// feedback is optional — pass user feedback from /sloper revise when re-triaging.
+func (p *Pipeline) SpecIssue(ctx context.Context, issue models.IssueDetail, feedback, sessionID string) (*models.SpecResult, error) {
+	out, err := p.ag.RunStageWithCWD(ctx, buildSpecPrompt(issue, feedback), "", sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("spec: %w", err)
 	}
@@ -36,8 +31,10 @@ func (p *Pipeline) SpecIssue(ctx context.Context, issue models.IssueDetail) (*mo
 }
 
 // ImplementFix runs the WORK stage: implements the spec plan.
-func (p *Pipeline) ImplementFix(ctx context.Context, spec *models.SpecResult) (*models.WorkResult, error) {
-	out, err := p.ag.RunStage(ctx, buildWorkPrompt(spec))
+// worktreePath is the CWD for the agent (a git worktree).
+// feedback is optional — pass user feedback when re-working based on comments.
+func (p *Pipeline) ImplementFix(ctx context.Context, spec *models.SpecResult, worktreePath, feedback, sessionID string) (*models.WorkResult, error) {
+	out, err := p.ag.RunStageWithCWD(ctx, buildWorkPrompt(spec, worktreePath, feedback), worktreePath, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("work: %w", err)
 	}
@@ -45,8 +42,9 @@ func (p *Pipeline) ImplementFix(ctx context.Context, spec *models.SpecResult) (*
 }
 
 // ReviewPR runs the REVIEW stage: reviews a diff.
-func (p *Pipeline) ReviewPR(ctx context.Context, diff string) (*models.ReviewResult, error) {
-	out, err := p.ag.RunStage(ctx, buildReviewPrompt(diff))
+// worktreePath is the CWD for the review agent (a separate worktree at the PR head).
+func (p *Pipeline) ReviewPR(ctx context.Context, diff, worktreePath, sessionID string) (*models.ReviewResult, error) {
+	out, err := p.ag.RunStageWithCWD(ctx, buildReviewPrompt(diff, worktreePath), worktreePath, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("review: %w", err)
 	}
@@ -54,8 +52,9 @@ func (p *Pipeline) ReviewPR(ctx context.Context, diff string) (*models.ReviewRes
 }
 
 // FixReviewIssues runs the FIX stage: addresses review feedback.
-func (p *Pipeline) FixReviewIssues(ctx context.Context, review *models.ReviewResult) (*models.WorkResult, error) {
-	out, err := p.ag.RunStage(ctx, buildFixPrompt(review))
+// worktreePath is the CWD for the fix agent (the WORK worktree).
+func (p *Pipeline) FixReviewIssues(ctx context.Context, review *models.ReviewResult, worktreePath, sessionID string) (*models.WorkResult, error) {
+	out, err := p.ag.RunStageWithCWD(ctx, buildFixPrompt(review, worktreePath), worktreePath, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("fix: %w", err)
 	}
@@ -64,8 +63,6 @@ func (p *Pipeline) FixReviewIssues(ctx context.Context, review *models.ReviewRes
 
 // ─── Response parsers ───────────────────────────────────────────────
 
-// extractJSONBlock finds the first ```json … ``` fenced block and
-// unmarshals it into dst.  Falls back to the raw text if no JSON found.
 func extractJSONBlock(text string, dst any) {
 	start := strings.Index(text, "```json")
 	if start == -1 {
@@ -81,7 +78,6 @@ func extractJSONBlock(text string, dst any) {
 			}
 		}
 	}
-	// Fallback: try raw text as JSON.
 	_ = json.Unmarshal([]byte(text), dst)
 }
 

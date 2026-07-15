@@ -12,7 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ButterHost69/sloper/internal/logger"
 	"github.com/ButterHost69/sloper/internal/models"
+	"go.uber.org/zap"
 )
 
 func Run(ctx context.Context, options models.ShellOptions) (models.ShellResult, error) {
@@ -120,7 +122,8 @@ func Run(ctx context.Context, options models.ShellOptions) (models.ShellResult, 
 		DurationMS: duration.Milliseconds(),
 	}
 
-	// TODO: what happens if there are multiple errors ?? what should happen then ? also how to compact or preserve all of them ?
+	logShellCommand(options, result, duration, timedOut, canceledErr)
+
 	if timedOut {
 		// TODO: Find Why are there duplicates being sent ? also why is this sent as a pointer ??
 		return result, &models.ShellCommandExecutionError{Message: "Command Timed Out", Result: result}
@@ -178,4 +181,47 @@ func commandFailureMessage(result models.ShellResult) string {
 		}
 	}
 	return message
+}
+
+func logShellCommand(options models.ShellOptions, result models.ShellResult, duration time.Duration, timedOut bool, canceledErr error) {
+	log := logger.Default()
+	if log == nil {
+		return
+	}
+
+	args := strings.Join(options.Args, " ")
+	fields := []zap.Field{
+		zap.String("command", options.Command+" "+args),
+		zap.Int("exit_code", result.ExitCode),
+		zap.Duration("duration", duration),
+	}
+	if options.CWD != "" {
+		fields = append(fields, zap.String("cwd", options.CWD))
+	}
+	if result.Stdout != "" {
+		stdout := strings.TrimSpace(result.Stdout)
+		if len(stdout) > 500 {
+			stdout = stdout[:500] + "...(truncated)"
+		}
+		fields = append(fields, zap.String("stdout", stdout))
+	}
+	if result.Stderr != "" {
+		stderr := strings.TrimSpace(result.Stderr)
+		if len(stderr) > 500 {
+			stderr = stderr[:500] + "...(truncated)"
+		}
+		fields = append(fields, zap.String("stderr", stderr))
+	}
+	if timedOut {
+		fields = append(fields, zap.Bool("timed_out", true))
+	}
+	if canceledErr != nil {
+		fields = append(fields, zap.String("canceled", canceledErr.Error()))
+	}
+
+	if result.ExitCode == 0 && !timedOut && canceledErr == nil {
+		log.Debug("shell: command completed", fields...)
+	} else {
+		log.Warn("shell: command failed", fields...)
+	}
 }

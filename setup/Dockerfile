@@ -21,6 +21,15 @@ RUN (type -p wget >/dev/null || ( apt update &&  apt install wget -y)) \
 # Download and Install agent (pi)
 # RUN curl -fsSL https://opencode.ai/install | bash
 
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.5/install.sh | bash
+ENV NVM_DIR=/root/.nvm
+RUN \. "$HOME/.nvm/nvm.sh"
+RUN . "$NVM_DIR/nvm.sh" && nvm install 24
+RUN . "$NVM_DIR/nvm.sh" && node -v # Should print "v24.18.0".
+RUN . "$NVM_DIR/nvm.sh" && npm -v # Should print "11.16.0".
+RUN . "$NVM_DIR/nvm.sh" && npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
+    && ln -sf "$(npm root -g)/@earendil-works/pi-coding-agent/dist/cli.js" /usr/local/bin/pi \
+    && chmod +x /usr/local/bin/pi
 
 COPY ./script.sh ./setup.sh
 COPY ./sloper /usr/local/bin/sloper

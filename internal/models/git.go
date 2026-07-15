@@ -40,7 +40,46 @@ type DefaultGitRetryPolicy struct {
 }
 
 func (p *DefaultGitRetryPolicy) ShouldRetry(args []string, err error, attempt int) bool {
+	if isPermanentGitError(err) {
+		return false
+	}
 	return true
+}
+
+func isPermanentGitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	permanent := []string{
+		"already exists",
+		"not found",
+		"not a git repository",
+		"invalid",
+		"permission denied",
+		"Permission denied",
+		"authentication failed",
+		"could not read Username",
+		"could not read Password",
+		"no such file or directory",
+		"not a valid object",
+		"does not match any",
+	}
+	for _, p := range permanent {
+		if contains(msg, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *DefaultGitRetryPolicy) Delay(attempt int) time.Duration {

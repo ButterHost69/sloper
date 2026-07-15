@@ -1,18 +1,20 @@
 package agent
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os/exec"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/ButterHost69/sloper/internal/logger"
 	"github.com/ButterHost69/sloper/internal/models"
 	"github.com/ButterHost69/sloper/internal/utils"
+	"go.uber.org/zap"
 )
 
 // rpcClient manages a single pi --mode rpc subprocess.
@@ -64,8 +66,22 @@ func newRPCClient(ctx context.Context, opts models.AgentOptions) (*rpcClient, er
 	if opts.Thinking != "" {
 		args = append(args, "--thinking", opts.Thinking)
 	}
-	// V1: no session persistence; add --session later for Variant C.
-	args = append(args, "--no-session")
+	if opts.APIKey != "" {
+		args = append(args, "--api-key", opts.APIKey)
+	}
+	if opts.Provider != "" {
+		args = append(args, "--provider", opts.Provider)
+	}
+	// Enable all tools including grep/find/ls (off by default in pi).
+	args = append(args, "--tools", "read,bash,edit,write,grep,find,ls")
+	// Trust the project directory so pi doesn't block on interactive prompts.
+	args = append(args, "--approve")
+	if opts.SessionDir != "" {
+		args = append(args, "--session-dir", opts.SessionDir)
+	}
+	if opts.SessionID != "" {
+		args = append(args, "--session-id", opts.SessionID)
+	}
 
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Dir = opts.CWD
@@ -209,9 +225,8 @@ func (c *rpcClient) readLoop() {
 			if c.ctx.Err() != nil {
 				return // normal shutdown
 			}
-			// Malformed line – log and try to continue.
 			if !isEOF(err) {
-				log.Printf("[agent rpc] decode error: %v", err)
+				logger.Default().Warn("agent rpc: decode error", zap.Error(err))
 			}
 			return
 		}
@@ -245,10 +260,12 @@ func (c *rpcClient) readLoop() {
 }
 
 func (c *rpcClient) drainStderr(r io.Reader) {
-	var buf strings.Builder
-	_, _ = io.Copy(&buf, r)
-	if s := strings.TrimSpace(buf.String()); s != "" {
-		log.Printf("[agent rpc] stderr: %s", s)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			logger.Default().Warn("agent rpc: stderr", zap.String("line", line))
+		}
 	}
 }
 

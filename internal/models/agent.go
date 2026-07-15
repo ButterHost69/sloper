@@ -8,20 +8,39 @@ type AgentOptions struct {
 	CWD        string        // repo working directory
 	Model      string        // e.g. "claude-sonnet-4:high"
 	Thinking   string        // off | minimal | low | medium | high | xhigh | max
+	APIKey     string        // API key for the provider (passed as --api-key)
+	Provider   string        // provider name (passed as --provider, e.g. "anthropic", "openai")
+	SessionID  string        // deterministic session ID (passed as --session-id)
+	SessionDir string        // directory for session storage (passed as --session-dir)
 	Timeout    time.Duration // per-prompt deadline; 0 = no deadline
 }
 
 // AgentEvent mirrors a JSONL line from pi --mode rpc stdout.
 type AgentEvent struct {
-	Type                  string           `json:"type"`
-	AssistantMessageEvent *AgentMsgDelta   `json:"assistantMessageEvent,omitempty"`
-	ToolName              string           `json:"toolName,omitempty"`
-	ToolCallID            string           `json:"toolCallId,omitempty"`
-	IsError               bool             `json:"isError,omitempty"`
-	Error                 string           `json:"error,omitempty"`
-	ID                    string           `json:"id,omitempty"`
-	Command               string           `json:"command,omitempty"`
-	Success               *bool            `json:"success,omitempty"`
+	Type                  string         `json:"type"`
+	AssistantMessageEvent *AgentMsgDelta `json:"assistantMessageEvent,omitempty"`
+	Message               *AgentMessage  `json:"message,omitempty"`
+	ToolName              string         `json:"toolName,omitempty"`
+	ToolCallID            string         `json:"toolCallId,omitempty"`
+	IsError               bool           `json:"isError,omitempty"`
+	Error                 string         `json:"error,omitempty"`
+	ID                    string         `json:"id,omitempty"`
+	Command               string         `json:"command,omitempty"`
+	Success               *bool          `json:"success,omitempty"`
+	WillRetry             bool           `json:"willRetry,omitempty"`
+}
+
+// AgentMessage is the message object inside message_start / message_end events.
+type AgentMessage struct {
+	Role       string             `json:"role"` // user | assistant | toolResult | custom
+	Content    []AgentContentPart `json:"content"`
+	StopReason string             `json:"stopReason,omitempty"`
+}
+
+// AgentContentPart is one part of a message's content array.
+type AgentContentPart struct {
+	Type string `json:"type"` // text | tool_call | etc.
+	Text string `json:"text,omitempty"`
 }
 
 // AgentMsgDelta is the streaming delta inside message_update events.
@@ -61,7 +80,7 @@ func (e AgentEvent) IsTerminal() bool {
 type PipelineStage int
 
 const (
-	StageSpec   PipelineStage = iota
+	StageSpec PipelineStage = iota
 	StageWork
 	StageReview
 	StageFix
