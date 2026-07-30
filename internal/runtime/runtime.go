@@ -42,6 +42,7 @@ func (r *Runtime) Start(ctx context.Context) {
 	}
 	defer db.Close()
 
+	log.Info("runtime: connected to the database successfuly", zap.String("repo", r.config.RepoPath))
 	if err := storage.Migrate(ctx, db); err != nil {
 		log.Error("runtime: database migration failed", zap.Error(err))
 		return
@@ -49,8 +50,12 @@ func (r *Runtime) Start(ctx context.Context) {
 
 	repos := storage.NewRepositories(db)
 
+	log.Info("runtime: initialized database successfully", zap.String("repo", r.config.RepoPath))
 	r.runRecovery(ctx, repos, log)
 
+	// Why is worktree cleanup / handled here ?
+	// Because it is already being done in the scheduler.
+	// Also why do we create a new worktree manager in here and in the scheduler ?	
 	wtMgr := worktree.NewManager("", git.New(models.GitGatewayOptions{}))
 	if err := wtMgr.CleanupAll(ctx, r.config.RepoPath); err != nil {
 		log.Warn("runtime: worktree cleanup failed", zap.Error(err))

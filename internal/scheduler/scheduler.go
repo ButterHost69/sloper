@@ -53,8 +53,10 @@ func (s *Scheduler) Start(ctx context.Context) {
 	s.log.Info("scheduler: starting", zap.String("repo", s.RepoPath))
 
 	s.ghClient = myGithub.NewGithubGateway(models.GithubOptions{CWD: s.RepoPath})
+	s.log.Info("scheduler: initialized GitHub client", zap.String("repo", s.RepoPath))
 
 	s.gitClient = myGit.New(models.GitGatewayOptions{})
+	s.log.Info("scheduler: initialized Git client", zap.String("repo", s.RepoPath))
 
 	repoName, err := s.gitClient.DetectGitHubRepo(ctx, s.RepoPath)
 	if err != nil {
@@ -83,7 +85,9 @@ func (s *Scheduler) Start(ctx context.Context) {
 	})
 	s.pl = pipeline.New(s.agentGw)
 
+	// Why is manager declared twice in the runtime and scheduler ?
 	s.wtMgr = worktree.NewManager("", s.gitClient)
+	s.log.Info("scheduler: initialized worktree manager", zap.String("repo", s.RepoPath))
 
 	s.tick(ctx)
 
@@ -107,6 +111,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 		EventType: "tick.started",
 	})
 
+	s.log.Info("scheduler: fetching all open issues", zap.String("phase", "discovery"))
 	issues, err := s.ghClient.GetAllOpenIssuesRaw(ctx, models.GithubIssueOptions{
 		Repo:  s.RepoName,
 		CWD:   s.RepoPath,
@@ -121,7 +126,10 @@ func (s *Scheduler) tick(ctx context.Context) {
 		return
 	}
 
-	s.log.Info("scheduler: found open issues", zap.Int("count", len(issues)))
+	s.log.Info(
+		"scheduler: found open issues",
+		zap.Int("count", len(issues)),
+		zap.String("phase", "discovery"))
 
 	for _, summary := range issues {
 		if err := ctx.Err(); err != nil {
@@ -148,6 +156,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 
 func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSummary) error {
 	log := s.log.With(logger.WithIssue(summary.Number))
+	log.Info("issue: processing", zap.String("title", summary.Title), zap.String("phase", "understanding"))
 
 	cached, err := s.db.GetIssue(ctx, summary.Number)
 	if err != nil {
@@ -158,6 +167,7 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 		return nil
 	}
 
+	log.Info("issue: fetching issue details", zap.String("title", summary.Title), zap.String("phase", "understanding"))
 	issue, err := s.ghClient.ViewIssue(ctx, models.ViewIssueInput{
 		Repo:        s.RepoName,
 		IssueNumber: summary.Number,
@@ -169,6 +179,10 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 
 	// Cache all comments in DB, marking bot's own comments as processed.
 	// Exception: bot's /sloper commands stay unprocessed so they get handled.
+	
+	// Modify the behaviour.
+	// UnProcessed comments are those without a quote reply from our account.
+	// This also include comments from out account as well.
 	for _, c := range issue.Comments {
 		isBot := s.BotUser != "" && c.Author == s.BotUser
 		isSloperCmd := slash.IsValidCommand(c.Body)
