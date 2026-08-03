@@ -9,7 +9,7 @@ import (
 
 func defaultLimit(limit int) int {
 	if limit <= 0 {
-		return models.DefaultGithubIssuesLimit 
+		return models.DefaultGithubIssuesLimit
 	}
 	return limit
 }
@@ -125,6 +125,7 @@ func extractCommentInfos(value any) []models.CommentInfo {
 			CreatedAt:         utils.FirstNonEmpty(utils.AsString(row["createdAt"]), utils.AsString(row["created_at"])),
 			UpdatedAt:         utils.FirstNonEmpty(utils.AsString(row["updatedAt"]), utils.AsString(row["updated_at"])),
 			URL:               utils.FirstNonEmpty(utils.AsString(row["url"]), utils.AsString(row["html_url"])),
+			InReplyToID:       utils.AsInt64(firstNonNil(row["in_reply_to_id"], row["inReplyToId"])),
 		})
 	}
 	return out

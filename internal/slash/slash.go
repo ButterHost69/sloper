@@ -15,6 +15,7 @@ const (
 	CmdAbort   CommandType = "abort"
 	CmdStatus  CommandType = "status"
 	CmdRetry   CommandType = "retry"
+	CmdSpec    CommandType = "spec"
 )
 
 type Command struct {
@@ -48,7 +49,7 @@ func parseComment(c models.CommentInfo) *Command {
 	rest := strings.TrimSpace(match[2])
 
 	switch cmdType {
-	case CmdApprove, CmdAbort, CmdStatus, CmdRetry:
+	case CmdApprove, CmdAbort, CmdStatus, CmdRetry, CmdSpec:
 		return &Command{
 			Type:      cmdType,
 			Author:    c.Author,

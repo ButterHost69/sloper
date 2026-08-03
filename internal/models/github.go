@@ -142,4 +142,6 @@ type CommentInfo struct {
 	CreatedAt         string
 	UpdatedAt         string
 	URL               string
+	InReplyToID       int64
+	RepliedByBot      bool
 }

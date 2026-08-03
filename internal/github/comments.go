@@ -20,6 +20,25 @@ func (g *GithubGateway) PostIssueComment(ctx context.Context, repo string, issue
 	return err
 }
 
+func (g *GithubGateway) ReplyToIssueComment(ctx context.Context, repo string, issueNumber, replyToID int64, body string) error {
+	if strings.TrimSpace(body) == "" {
+		return fmt.Errorf("github: reply to comment: body is empty")
+	}
+	if replyToID <= 0 {
+		return fmt.Errorf("github: reply to comment: invalid reply_to id %d", replyToID)
+	}
+	hostname, repoPath := splitRepoHostname(repo)
+	args := []string{"api", "--method", "POST",
+		"-f", "body=" + body,
+		"-f", fmt.Sprintf("in_reply_to=%d", replyToID),
+		fmt.Sprintf("repos/%s/issues/%d/comments", repoPath, issueNumber)}
+	if hostname != "" {
+		args = append(args, "--hostname", hostname)
+	}
+	_, err := g.runGh(ctx, g.cwd, "", args...)
+	return err
+}
+
 func (g *GithubGateway) AddIssueLabel(ctx context.Context, repo string, issueNumber int64, label string) error {
 	_, repoPath := splitRepoHostname(repo)
 	args := []string{"issue", "edit", fmt.Sprintf("%d", issueNumber),

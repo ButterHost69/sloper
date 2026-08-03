@@ -55,3 +55,33 @@ In the Distant Future
 - [ ] Easily Find loops made by others, from a marketplace or such.
 - [ ] Loops for Performance, UI and more 
 - [ ] Finds Issue, uses these loops to solve them(picks the best loop by itself).
+
+- [ ] Check if any issue duplicate or already solved. (Check how sloper solves it)
+
+## TIC
+ 
+### Discover Issues
+#### Flow:
+1. Go through N issues.
+2. Check is any latest comment by bot ; ignore
+3. Check if any comment is a / cmd
+4. Run spec stage if with the feedback
+
+
+#### Flow:
+1. Go through N issues
+2. If comment is unprocessed or new than sloper replies to it.
+    - Let sloper to think about it and write a comment "asking", "Spec"
+    - When asking a question -> quote the issue.
+    - When spec than just pop it like that.
+
+;; this is theory should stop the repeating replies, and no need to cache shit.
+
+
+
+# Overall Flow:
+
+1. Add issue
+2. Provide details and modifications need be.
+3. /sloper spec - to regenerate spec
+4. if no changes or suggestions : /sloper approve

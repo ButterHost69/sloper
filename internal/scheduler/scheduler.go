@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -155,15 +156,24 @@ func (s *Scheduler) tick(ctx context.Context) {
 }
 
 func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSummary) error {
+	// Changes to be made:
+	// - [ ] Remove the way a comment is marked as processed.
+	// 		 Use quote reply from our account to mark a comment as processed.
+	// - [ ] Comments can now be questions(grill-me), or suggestions, or specs.
+	// - [ ] Look into the storage cluster fuck for the issues part and make it more simpler
+	// - [ ] Look into simpler retry logic
 	log := s.log.With(logger.WithIssue(summary.Number))
-	log.Info("issue: processing", zap.String("title", summary.Title), zap.String("phase", "understanding"))
 
+	// We still have to process an issue irrespective of its issue stage(through the label)
+	// Even if it is spec-done -> there could be some new insights. (not handling them rn though)
+	// Thats why we are doing this cache lookup.
 	cached, err := s.db.GetIssue(ctx, summary.Number)
 	if err != nil {
 		return fmt.Errorf("get cached issue: %w", err)
 	}
 
 	if cached != nil && cached.UpdatedAt == summary.UpdatedAt {
+		log.Info("issue: skipping", zap.String("title", summary.Title), zap.String("cache", "hit"))
 		return nil
 	}
 
@@ -177,24 +187,87 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 		return fmt.Errorf("view issue: %w", err)
 	}
 
+	ifNew := true
+	for _, label := range issue.Labels {
+		if slices.Contains(models.OUR_LABEL, label) {
+			ifNew = false
+			break
+		}
+	}
+
+	// If the issue has no progress tags than process it as new.
+	if ifNew {
+		log.Info("issue: new issue", zap.String("title", issue.Title), zap.String("phase", "triaging issue"))
+		// TODO: Look into this function more and look it it caches stuff properly.
+		return s.runSpecStage(ctx, issue, "")
+	}
+
+	// ifSpecDone := false
+	// for _, label := range issue.Labels {
+	// 	if label == models.StageSpecDone {
+	// 		ifSpecDone = true
+	// 		break
+	// 	}
+	// }
+	
+	// If not new issue, check if any comment unprocessed by our bot.
+	botRepliedTo := make(map[int64]bool)
+	for _, c := range issue.Comments {
+		if s.BotUser != "" && c.Author == s.BotUser && c.InReplyToID != 0 {
+			botRepliedTo[c.InReplyToID] = true
+		}
+	}
+
+	for _, c := range issue.Comments {
+		isBot := s.BotUser != "" && c.Author == s.BotUser
+		if !isBot && !botRepliedTo[c.ID] {
+			log.Info("issue: process unresolved comment", zap.Int64("comment_id", c.ID), zap.String("phase", "triaging comment"))
+			// Process UnProcesed Comment.
+			// TODO: Add a func like s.runSpecStage() that either
+			// -> performs /grill-me to fetch more details
+			// -> propose a fix aka do an addon to the comment's problem, or talks.
+			// NOTE: does not create a spec
+			// NOTE: If fails, than dont reply comment
+			// NOTE: the output of the following at the end will be a replied comment to the addressing comment
+		}
+	}
+
+	// if ifSpecDone {
+	// 	// Get comment with any comment is without a quote reply from our account.
+
+	// }
+
+	// ---------------- Irrelevant code ----------------
 	// Cache all comments in DB, marking bot's own comments as processed.
 	// Exception: bot's /sloper commands stay unprocessed so they get handled.
-	
+
 	// Modify the behaviour.
 	// UnProcessed comments are those without a quote reply from our account.
 	// This also include comments from out account as well.
-	for _, c := range issue.Comments {
-		isBot := s.BotUser != "" && c.Author == s.BotUser
-		isSloperCmd := slash.IsValidCommand(c.Body)
-		_ = s.db.InsertComment(ctx, storage.CommentRecord{
-			ID:          c.ID,
-			IssueNumber: issue.Number,
-			Author:      c.Author,
-			Body:        c.Body,
-			CreatedAt:   c.CreatedAt,
-			Processed:   isBot && !isSloperCmd,
-		})
-	}
+
+
+
+	// TODO: Handle caching to be done after the comment is processed,
+	// Not RN
+	// ---------------------------------------------------------------------------
+	// for _, c := range issue.Comments {
+	// 	isBot := s.BotUser != "" && c.Author == s.BotUser
+	// 	isSloperCmd := slash.IsValidCommand(c.Body)
+	// 	_ = s.db.InsertComment(ctx, storage.CommentRecord{
+	// 		ID:           c.ID,
+	// 		IssueNumber:  issue.Number,
+	// 		Author:       c.Author,
+	// 		Body:         c.Body,
+	// 		CreatedAt:    c.CreatedAt,
+	// 		Processed:    isBot && !isSloperCmd,
+	// 		InReplyToID:  c.InReplyToID,
+	// 		RepliedByBot: botRepliedTo[c.ID],
+	// 	})
+	// }
+
+	// ----------------------------------------------------------------------
+	// TODO: Leaving cleaning and review from here : 
+	// ----------------------------------------------------------------------
 
 	maxCommentID := int64(0)
 	for _, c := range issue.Comments {

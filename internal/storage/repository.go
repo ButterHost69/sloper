@@ -211,12 +211,14 @@ func (r *Repositories) GetIssuesByStage(ctx context.Context, stage string) ([]Is
 // ─── Issue Comment Repository ─────────────────────────────────────────
 
 type CommentRecord struct {
-	ID          int64
-	IssueNumber int64
-	Author      string
-	Body        string
-	CreatedAt   string
-	Processed   bool
+	ID           int64
+	IssueNumber  int64
+	Author       string
+	Body         string
+	CreatedAt    string
+	Processed    bool
+	InReplyToID  int64
+	RepliedByBot bool
 }
 
 func (r *Repositories) InsertComment(ctx context.Context, c CommentRecord) error {
@@ -224,11 +226,16 @@ func (r *Repositories) InsertComment(ctx context.Context, c CommentRecord) error
 	if c.Processed {
 		processed = 1
 	}
+	repliedByBot := 0
+	if c.RepliedByBot {
+		repliedByBot = 1
+	}
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO issue_comments (id, issue_number, author, body, created_at, processed)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at
-	`, c.ID, c.IssueNumber, c.Author, c.Body, c.CreatedAt, processed)
+		INSERT INTO issue_comments (id, issue_number, author, body, created_at, processed, in_reply_to_id, replied_by_bot)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET body = excluded.body, created_at = excluded.created_at,
+			in_reply_to_id = excluded.in_reply_to_id, replied_by_bot = excluded.replied_by_bot
+	`, c.ID, c.IssueNumber, c.Author, c.Body, c.CreatedAt, processed, c.InReplyToID, repliedByBot)
 	if err != nil {
 		return fmt.Errorf("storage: insert comment %d: %w", c.ID, err)
 	}
@@ -237,7 +244,7 @@ func (r *Repositories) InsertComment(ctx context.Context, c CommentRecord) error
 
 func (r *Repositories) GetUnprocessedComments(ctx context.Context, issueNumber int64) ([]CommentRecord, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, issue_number, author, body, created_at, processed
+		SELECT id, issue_number, author, body, created_at, processed, in_reply_to_id, replied_by_bot
 		FROM issue_comments WHERE issue_number = ? AND processed = 0
 		ORDER BY created_at ASC
 	`, issueNumber)
@@ -250,11 +257,13 @@ func (r *Repositories) GetUnprocessedComments(ctx context.Context, issueNumber i
 	for rows.Next() {
 		var rec CommentRecord
 		var processed int
+		var repliedByBot int
 		if err := rows.Scan(&rec.ID, &rec.IssueNumber, &rec.Author, &rec.Body,
-			&rec.CreatedAt, &processed); err != nil {
+			&rec.CreatedAt, &processed, &rec.InReplyToID, &repliedByBot); err != nil {
 			return nil, fmt.Errorf("storage: scan comment: %w", err)
 		}
 		rec.Processed = processed != 0
+		rec.RepliedByBot = repliedByBot != 0
 		out = append(out, rec)
 	}
 	return out, rows.Err()
