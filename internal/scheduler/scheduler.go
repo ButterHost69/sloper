@@ -202,14 +202,6 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 		return s.runSpecStage(ctx, issue, "")
 	}
 
-	// ifSpecDone := false
-	// for _, label := range issue.Labels {
-	// 	if label == models.StageSpecDone {
-	// 		ifSpecDone = true
-	// 		break
-	// 	}
-	// }
-	
 	// If not new issue, check if any comment unprocessed by our bot.
 	botRepliedTo := make(map[int64]bool)
 	for _, c := range issue.Comments {
@@ -220,7 +212,7 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 
 	for _, c := range issue.Comments {
 		isBot := s.BotUser != "" && c.Author == s.BotUser
-		if !isBot && !botRepliedTo[c.ID] {
+		if !isBot && !botRepliedTo[c.ID] && !slash.IsValidCommand(c.Body) {
 			log.Info("issue: process unresolved comment", zap.Int64("comment_id", c.ID), zap.String("phase", "triaging comment"))
 			// Process UnProcesed Comment.
 			// TODO: Add a func like s.runSpecStage() that either
@@ -232,10 +224,19 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 		}
 	}
 
-	// if ifSpecDone {
-	// 	// Get comment with any comment is without a quote reply from our account.
-
-	// }
+	// Check is last comment is a slash one and handle it
+	// - /sloper spec (respecs with the feedback)
+	// - /sloper approve (start work stage)
+	// Check for slash commands from human unprocessed comments
+	cmd := slash.ParseComments(issue.Comments[len(issue.Comments)-1:])
+		log.Info("scheduler: new slash commands detected",
+			zap.String("phase", "slash command processing"))
+	
+	// Add the caches, one to prevent 
+	// Comments getting reprocessed everytime
+	// and commands getting reprocessed everytime. (Look into various table to add it to)
+	// Alot of the code at the end it not need tbh
+	return s.handleSlashCommand(ctx, issue, cmd[0])
 
 	// ---------------- Irrelevant code ----------------
 	// Cache all comments in DB, marking bot's own comments as processed.
@@ -244,8 +245,6 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	// Modify the behaviour.
 	// UnProcessed comments are those without a quote reply from our account.
 	// This also include comments from out account as well.
-
-
 
 	// TODO: Handle caching to be done after the comment is processed,
 	// Not RN
@@ -266,7 +265,7 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	// }
 
 	// ----------------------------------------------------------------------
-	// TODO: Leaving cleaning and review from here : 
+	// TODO: Leaving cleaning and review from here :
 	// ----------------------------------------------------------------------
 
 	maxCommentID := int64(0)
@@ -291,9 +290,8 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	}
 
 	if cached == nil {
-		log.Info("scheduler: new issue detected",
+		log.Info("scheduler: uncached issue detected",
 			zap.String("title", issue.Title), zap.Int("comments", len(issue.Comments)))
-		_ = s.db.UpsertIssue(ctx, rec)
 		return s.runSpecStage(ctx, issue, "")
 	}
 
@@ -342,7 +340,7 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	if hasNewCommands {
 		log.Info("scheduler: new slash commands detected",
 			zap.Int("unprocessed", len(humanUnprocessed)))
-		return s.handleSlashCommands(ctx, issue, commands, humanUnprocessed)
+		return s.handleSlashCommand(ctx, issue, commands[0])
 	}
 
 	// Check for new human comments (not from bot) that would trigger re-triage
@@ -468,92 +466,95 @@ func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, 
 	return nil
 }
 
-func (s *Scheduler) handleSlashCommands(
+func (s *Scheduler) handleSlashCommand(
 	ctx context.Context,
 	issue models.IssueDetail,
-	commands []slash.Command,
-	unprocessed []storage.CommentRecord,
+	cmd slash.Command,
 ) error {
 	log := s.log.With(logger.WithIssue(issue.Number))
+	log.Info("scheduler: processing slash command",
+		zap.String("command", string(cmd.Type)),
+		zap.String("author", cmd.Author))
 
-	for _, cmd := range commands {
-		alreadyProcessed := true
-		for _, u := range unprocessed {
-			if u.ID == cmd.CommentID {
-				alreadyProcessed = false
-				break
-			}
-		}
-		if alreadyProcessed {
-			continue
-		}
+	switch cmd.Type {
+	case slash.CmdApprove:
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "approve.received",
+			Message:     fmt.Sprintf("approved by @%s", cmd.Author),
+		})
+		s.transitionIssueStage(ctx, issue.Number, models.StageApproved)
+		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
+			fmt.Sprintf("Plan approved by @%s. Starting implementation...", cmd.Author))
+		s.cleanupSpecSession(issue.Number)
 
-		log.Info("scheduler: processing slash command",
-			zap.String("command", string(cmd.Type)),
-			zap.String("author", cmd.Author))
-
-		switch cmd.Type {
-		case slash.CmdApprove:
-			s.db.AppendEvent(ctx, storage.EventRecord{
-				IssueNumber: issue.Number,
-				EventType:   "approve.received",
-				Message:     fmt.Sprintf("approved by @%s", cmd.Author),
-			})
-			s.transitionIssueStage(ctx, issue.Number, models.StageApproved)
-			s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
-				fmt.Sprintf("Plan approved by @%s. Starting implementation...", cmd.Author))
-			s.cleanupSpecSession(issue.Number)
-
-		case slash.CmdRevise:
-			s.db.AppendEvent(ctx, storage.EventRecord{
-				IssueNumber: issue.Number,
-				EventType:   "revise.received",
-				Message:     fmt.Sprintf("revision requested by @%s: %s", cmd.Author, cmd.Feedback),
-			})
-			s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
-				fmt.Sprintf("Revising plan based on feedback from @%s...", cmd.Author))
-			if err := s.runSpecStage(ctx, issue, cmd.Feedback); err != nil {
-				return fmt.Errorf("revise spec: %w", err)
-			}
-
-		case slash.CmdAbort:
-			s.db.AppendEvent(ctx, storage.EventRecord{
-				IssueNumber: issue.Number,
-				EventType:   "abort.received",
-				Message:     fmt.Sprintf("aborted by @%s", cmd.Author),
-			})
-			s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
-			s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
-				fmt.Sprintf("Aborted by @%s. No further action will be taken.", cmd.Author))
-			s.cleanupIssueSessions(issue.Number)
-
-		case slash.CmdStatus:
-			cached, _ := s.db.GetIssue(ctx, issue.Number)
-			stage := "unknown"
-			if cached != nil {
-				stage = cached.Stage
-			}
-			s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
-				fmt.Sprintf("Current status: **%s**", stage))
-
-		case slash.CmdRetry:
-			s.db.AppendEvent(ctx, storage.EventRecord{
-				IssueNumber: issue.Number,
-				EventType:   "retry.received",
-				Message:     fmt.Sprintf("retry requested by @%s", cmd.Author),
-			})
-			s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
-				fmt.Sprintf("Retrying spec analysis as requested by @%s...", cmd.Author))
-			// Clear the failed state and re-run from scratch
-			s.transitionIssueStage(ctx, issue.Number, models.StageNew)
-			_ = s.db.UpdateIssueSpec(ctx, issue.Number, "")
-			if err := s.runSpecStage(ctx, issue, ""); err != nil {
-				return fmt.Errorf("retry spec: %w", err)
-			}
+	// Right now spec and revise same
+	// Modify to the desired behavior - use all comments to create new spec.
+	// Remove Revise one
+	case slash.CmdSpec:
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "revise.received",
+			Message:     fmt.Sprintf("revision requested by @%s: %s", cmd.Author, cmd.Feedback),
+		})
+		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
+			fmt.Sprintf("Revising plan based on feedback from @%s...", cmd.Author))
+		if err := s.runSpecStage(ctx, issue, cmd.Feedback); err != nil {
+			return fmt.Errorf("revise spec: %w", err)
 		}
 
-		_ = s.db.MarkCommentProcessed(ctx, cmd.CommentID)
+
+
+
+	case slash.CmdRevise:
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "revise.received",
+			Message:     fmt.Sprintf("revision requested by @%s: %s", cmd.Author, cmd.Feedback),
+		})
+		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
+			fmt.Sprintf("Revising plan based on feedback from @%s...", cmd.Author))
+		if err := s.runSpecStage(ctx, issue, cmd.Feedback); err != nil {
+			return fmt.Errorf("revise spec: %w", err)
+		}
+
+	case slash.CmdAbort:
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "abort.received",
+			Message:     fmt.Sprintf("aborted by @%s", cmd.Author),
+		})
+		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
+		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
+			fmt.Sprintf("Aborted by @%s. No further action will be taken.", cmd.Author))
+		s.cleanupIssueSessions(issue.Number)
+
+	case slash.CmdStatus:
+		cached, _ := s.db.GetIssue(ctx, issue.Number)
+		stage := "unknown"
+		if cached != nil {
+			stage = cached.Stage
+		}
+		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
+			fmt.Sprintf("Current status: **%s**", stage))
+
+	case slash.CmdRetry:
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "retry.received",
+			Message:     fmt.Sprintf("retry requested by @%s", cmd.Author),
+		})
+		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
+			fmt.Sprintf("Retrying spec analysis as requested by @%s...", cmd.Author))
+		// Clear the failed state and re-run from scratch
+		s.transitionIssueStage(ctx, issue.Number, models.StageNew)
+		_ = s.db.UpdateIssueSpec(ctx, issue.Number, "")
+		if err := s.runSpecStage(ctx, issue, ""); err != nil {
+			return fmt.Errorf("retry spec: %w", err)
+		}
 	}
+
+	_ = s.db.MarkCommentProcessed(ctx, cmd.CommentID)
 
 	_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID(issue.Comments))
 	return nil
