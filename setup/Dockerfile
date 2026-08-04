@@ -33,6 +33,7 @@ RUN . "$NVM_DIR/nvm.sh" && npm install -g --ignore-scripts @earendil-works/pi-co
 
 COPY ./script.sh ./setup.sh
 COPY ./sloper /usr/local/bin/sloper
+COPY ./skills/ ~/.pi/agent/skills/ 
 
 RUN mkdir -p ~/repo
 RUN chmod +x /setup.sh

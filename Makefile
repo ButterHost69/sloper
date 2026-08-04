@@ -1,4 +1,4 @@
-.PHONY: build-sloper format-check lint build-all build-docker launch-docker docker docker-up docker-down
+.PHONY: build-sloper format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean
 
 format-check:
 	gofmt -l .
@@ -27,3 +27,7 @@ docker-up:
 
 docker-down:
 	cd setup && sudo docker compose down
+
+docker-clean:
+	cd setup && sudo docker compose down -v
+	sudo docker system prune -a --volumes -f
