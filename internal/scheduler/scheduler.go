@@ -227,6 +227,10 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	for _, c := range issue.Comments {
 		isBot := s.BotUser != "" && c.Author == s.BotUser
 		if !isBot && !botRepliedTo[c.ID] && !slash.IsValidCommand(c.Body) {
+			done, _ := s.db.IsCommentProcessed(ctx, c.ID)
+			if done {
+				continue
+			}
 			log.Info("issue: process unresolved comment", zap.Int64("comment_id", c.ID), zap.String("phase", "triaging comment"))
 			// Process UnProcesed Comment.
 			// TODO: Add a func like s.runSpecStage() that either
@@ -444,6 +448,7 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 			Stage:       "spec",
 			Message:     "agent response type could not be determined",
 		})
+		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
 		return fmt.Errorf("spec: unclassifiable comment response")
 	}
 
@@ -472,11 +477,12 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 				errMsg = errMsg[:2000] + "..."
 			}
 			s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID,
-				fmt.Sprintf("## Sloper encountered an error during analysis\n\n"+
-					"```\n%s\n```\n\nPlease check the model/provider configuration "+
-					"in `.env` (AGENT_MODEL, AGENT_PROVIDER, AGENT_KEY).\n\n"+
-					"Use `/sloper retry` to try again after fixing the configuration.",
-					errMsg))
+				quoteReplyBody(unprocessedComment.Body,
+					fmt.Sprintf("## Sloper encountered an error during analysis\n\n"+
+						"```\n%s\n```\n\nPlease check the model/provider configuration "+
+						"in `.env` (AGENT_MODEL, AGENT_PROVIDER, AGENT_KEY).\n\n"+
+						"Use `/sloper retry` to try again after fixing the configuration.",
+						errMsg)))
 		}
 
 		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
@@ -487,14 +493,17 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 			Stage:       "spec",
 			Message:     "agent produced empty spec output",
 		})
+		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
 		return fmt.Errorf("spec: agent produced empty output")
 	}
 
 	s.transitionIssueStage(ctx, issue.Number, models.StageSpecDone)
-	responseComment := formatResponseComment(resp, issue.Number)
+	responseComment := quoteReplyBody(unprocessedComment.Body, formatResponseComment(resp, issue.Number))
 
 	if err := s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID, responseComment); err != nil {
 		log.Warn("scheduler: failed to post spec comment", zap.Error(err))
+	} else {
+		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
 	}
 
 	if err := s.ghClient.AddIssueLabel(ctx, s.RepoName, issue.Number, models.TRIAGED_LABEL); err != nil {
@@ -1123,6 +1132,25 @@ func (s *Scheduler) runFixStage(ctx context.Context, rec storage.IssueRecord, re
 }
 
 // ─── Formatting helpers ──────────────────────────────────────────────
+
+func quoteReplyBody(original, response string) string {
+	trimmed := strings.TrimSpace(original)
+	if trimmed == "" {
+		return response
+	}
+	return "> " + strings.ReplaceAll(trimmed, "\n", "\n> ") + "\n\n" + response
+}
+
+func (s *Scheduler) markCommentProcessed(ctx context.Context, issueNumber int64, c models.CommentInfo) {
+	_ = s.db.InsertComment(ctx, storage.CommentRecord{
+		ID:          c.ID,
+		IssueNumber: issueNumber,
+		Author:      c.Author,
+		Body:        c.Body,
+		CreatedAt:   c.CreatedAt,
+	})
+	_ = s.db.MarkCommentProcessed(ctx, c.ID)
+}
 
 func formatResponseComment(spec *models.ProcessCommentResult, issueNumber int64) string {
 	var b strings.Builder

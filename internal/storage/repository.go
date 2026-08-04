@@ -289,6 +289,17 @@ func (r *Repositories) HasComment(ctx context.Context, commentID int64) (bool, e
 	return exists, nil
 }
 
+func (r *Repositories) IsCommentProcessed(ctx context.Context, commentID int64) (bool, error) {
+	var processed bool
+	err := r.db.QueryRowContext(ctx,
+		"SELECT EXISTS(SELECT 1 FROM issue_comments WHERE id = ? AND processed = 1)", commentID,
+	).Scan(&processed)
+	if err != nil {
+		return false, fmt.Errorf("storage: check comment %d processed: %w", commentID, err)
+	}
+	return processed, nil
+}
+
 // ─── Pull Request Repository ──────────────────────────────────────────
 
 type PRRecord struct {
