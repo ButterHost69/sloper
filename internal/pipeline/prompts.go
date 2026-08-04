@@ -124,7 +124,6 @@ For example, if you propose a fix, your output should look like this:
 ` + "```json" + `{
   "summary": "one-line summary of the issue and the proposed fix",
   "files_to_change": ["path/to/file1.go", "path/to/file2.go"],
-  "implementation_plan": "detailed multi-paragraph plan describing exactly what changes to make in each file, including function signatures, edge cases, and test considerations"
 }
 ` + "```" + `
 
@@ -160,7 +159,7 @@ func buildProcessCommentPrompt(issue models.IssueDetail, unprocessedComment stri
 	if unprocessedComment == "" {
 		unprocessedComment = "(none)"
 	}
-	return fmt.Sprintf(specTemplate, issue.Title, issue.Body, labels, comments, unprocessedComment)
+	return fmt.Sprintf(processCommentTemplate, issue.Title, issue.Body, labels, comments, unprocessedComment)
 }
 
 // ─── WORK ───────────────────────────────────────────────────────────

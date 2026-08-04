@@ -127,14 +127,13 @@ type ProcessCommentResult struct {
 	Questions          []string `json:"questions"`           // grill
 	Summary            string   `json:"summary"`             // propose
 	FilesToChange      []string `json:"files_to_change"`     // propose
-	ImplementationPlan string   `json:"implementation_plan"` // propose
 	RawOutput          string   `json:"-"`                   // propse
 }
 
 // These are just midway structs to help parse the JSON output from the agent.
 // The final result is a ProcessCommentResult, which can be either a grill or a spec.
 type ProcessCommentGrillParse struct {
-	Type      string   `json:"type"`      // "grill"
+	GrillMe   bool     `json:"grill_me"`  // "grill"
 	Questions []string `json:"questions"` // grill
 	RawOutput string   `json:"-"`         // grill
 }
@@ -142,7 +141,6 @@ type ProcessCommentGrillParse struct {
 type ProcessCommentProposeParse struct {
 	Summary            string   `json:"summary"`             // spec
 	FilesToChange      []string `json:"files_to_change"`     // spec
-	ImplementationPlan string   `json:"implementation_plan"` // spec
 	RawOutput          string   `json:"-"`                   // spec
 }
 

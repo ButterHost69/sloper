@@ -206,14 +206,13 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	if ifNew {
 		log.Info("issue: new issue", zap.String("title", issue.Title), zap.String("phase", "triaging issue"))
 		// TODO: Look into this function more and look if it caches stuff properly
+
 		err := s.runSpecStage(ctx, issue, "")
-		
-		log.Info("issue: new issue processed", zap.String("title", summary.Title))
-
-		rec := storage.IssueRecordFromModel(issue, models.StageNew)
-		rec.LastCommentID = maxCommentID
-		_ = s.db.UpsertIssue(ctx, rec)
-
+		if err == nil {
+			rec := storage.IssueRecordFromModel(issue, models.StageSpecDone)
+			rec.LastCommentID = maxCommentID
+			_ = s.db.UpsertIssue(ctx, rec)
+		}
 		return err
 	}
 
@@ -236,11 +235,7 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 			// NOTE: does not create a spec
 			// NOTE: If fails, than dont reply comment
 			// NOTE: the output of the following at the end will be a replied comment to the addressing comment
-			return s.processIssueComment(
-				ctx,
-				issue,
-				c,
-			)
+			return s.processIssueComment(ctx, issue, c)
 		}
 	}
 
@@ -249,6 +244,12 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	// - /sloper approve (start work stage)
 	// Check for slash commands from human unprocessed comments
 	cmd := slash.ParseComments(issue.Comments[len(issue.Comments)-1:])
+	if len(cmd) == 0 {
+		// This should actually never get executed : look into it and fix it where you can.
+		_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
+		return nil
+	}
+
 	log.Info("scheduler: new slash commands detected",
 		zap.String("phase", "slash command processing"))
 
@@ -411,12 +412,45 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
 		return fmt.Errorf("spec: %w", err)
 	}
+	var _type string
+	switch resp.Type {
+	case int(models.CommentPropose):
+		_type = "Proposed"
+	case int(models.CommentGrillme):
+		_type = "GrillMe"
+	default:
+		_type = "Unknown"
+	}
 
-	if resp.Type == int(models.CommentPropose) || resp.Summary == "" || len(resp.FilesToChange) == 0 || resp.ImplementationPlan == "" {
-		log.Warn("scheduler: spec has empty fields — agent output may not have been parsed correctly",
+	log.Info("scheduler: comment processed",
+		zap.String("type", _type))
+
+	if resp.Type == int(models.CommentUnknown) {
+		log.Warn("scheduler: comment response could not be classified",
+			zap.Int("raw_output_len", len(resp.RawOutput)))
+		if len(resp.RawOutput) > 0 {
+			preview := resp.RawOutput
+			if len(preview) > 1000 {
+				preview = preview[:1000] + "...(truncated)"
+			}
+			log.Warn("scheduler: raw agent output", zap.String("output", preview))
+		}
+
+		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
+		s.db.FailRun(ctx, runID, "comment response could not be classified")
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "spec.unclassified_response",
+			Stage:       "spec",
+			Message:     "agent response type could not be determined",
+		})
+		return fmt.Errorf("spec: unclassifiable comment response")
+	}
+
+	if resp.Type == int(models.CommentPropose) && (resp.Summary == "" || len(resp.FilesToChange) == 0) {
+		log.Warn("scheduler: proposed comment response has empty fields — agent output may not have been parsed correctly",
 			zap.String("summary", resp.Summary),
 			zap.Int("files_count", len(resp.FilesToChange)),
-			zap.Bool("has_plan", resp.ImplementationPlan != ""),
 			zap.Int("raw_output_len", len(resp.RawOutput)))
 		if len(resp.RawOutput) > 0 {
 			preview := resp.RawOutput
@@ -455,18 +489,6 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 		})
 		return fmt.Errorf("spec: agent produced empty output")
 	}
-
-	var _type string
-	switch resp.Type {
-	case int(models.CommentPropose):
-		_type = "Proposed"
-	case int(models.CommentGrillme):
-		_type = "GrillMe"
-	default:
-		_type = "Unknown"
-	}
-	log.Info("scheduler: comment processed",
-		zap.String("type", _type))
 
 	s.transitionIssueStage(ctx, issue.Number, models.StageSpecDone)
 	responseComment := formatResponseComment(resp, issue.Number)
@@ -1105,9 +1127,9 @@ func (s *Scheduler) runFixStage(ctx context.Context, rec storage.IssueRecord, re
 func formatResponseComment(spec *models.ProcessCommentResult, issueNumber int64) string {
 	var b strings.Builder
 	if spec.Type == int(models.CommentPropose) {
-		b.WriteString("## Sloper Spec Analysis\n\n")
-		b.WriteString(fmt.Sprintf("**Summary:** %s\n\n", spec.Summary))
-		b.WriteString("### Files to Change\n")
+		b.WriteString("For this we can:\n")
+		b.WriteString(fmt.Sprintf("%s\n\n", spec.Summary))
+		b.WriteString("This will include the following file changes:\n")
 		if len(spec.FilesToChange) > 0 {
 			for _, f := range spec.FilesToChange {
 				b.WriteString(fmt.Sprintf("- `%s`\n", f))
@@ -1115,15 +1137,8 @@ func formatResponseComment(spec *models.ProcessCommentResult, issueNumber int64)
 		} else {
 			b.WriteString("_To be determined during implementation_\n")
 		}
-		b.WriteString("\n### Implementation Plan\n\n")
-		b.WriteString(spec.ImplementationPlan)
-		b.WriteString("\n\n---\n")
-		b.WriteString("_To approve this plan, comment `/sloper approve`\n")
-		b.WriteString("To request changes, comment `/sloper revise: <your feedback>`\n")
-		b.WriteString("To abort, comment `/sloper abort`_")
-
 	} else if spec.Type == int(models.CommentGrillme) {
-		b.WriteString("## Before I propose a possible fix, i would like to get a clarification on these question\n\n")
+		b.WriteString("Before I propose a possible fix, i would like to get a clarification on these question\n\n")
 		if len(spec.Questions) > 0 {
 			for _, f := range spec.Questions {
 				b.WriteString(fmt.Sprintf("- `%s`\n", f))

@@ -97,16 +97,15 @@ func parseCommentSpecResult(text string) *models.ProcessCommentResult {
 	var parsedGrill models.ProcessCommentGrillParse
 
 	extractJSONBlock(text, &parsedPropose)
-	if r.FilesToChange != nil || r.ImplementationPlan != "" || r.Summary != "" {
+	if parsedPropose.FilesToChange != nil || parsedPropose.Summary != "" {
 		r.Type = int(models.CommentPropose)
 		r.Summary = parsedPropose.Summary
 		r.FilesToChange = parsedPropose.FilesToChange
-		r.ImplementationPlan = parsedPropose.ImplementationPlan
 		return r
 	}
 
 	extractJSONBlock(text, &parsedGrill)
-	if parsedGrill.Type == "grill" {
+	if parsedGrill.GrillMe {
 		r.Type = int(models.CommentGrillme)
 		r.Questions = parsedGrill.Questions
 		return r
