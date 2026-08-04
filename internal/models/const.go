@@ -19,14 +19,7 @@ const (
 )
 
 var OUR_LABEL = []string{
-	StageNew,
-	StageSpecOngoing,
-	StageSpecDone,
-	StageApproved,
-	StageWorkDone,
-	StageReviewDone,
-	StageMerged,
-	StageFailed,
+	TRIAGED_LABEL,
 }
 
 // var NEW_ISSUE_LABELS = []string{}

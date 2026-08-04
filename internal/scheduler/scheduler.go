@@ -156,12 +156,6 @@ func (s *Scheduler) tick(ctx context.Context) {
 }
 
 func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSummary) error {
-	// Changes to be made:
-	// - [ ] Remove the way a comment is marked as processed.
-	// 		 Use quote reply from our account to mark a comment as processed.
-	// - [ ] Comments can now be questions(grill-me), or suggestions, or specs.
-	// - [ ] Look into the storage cluster fuck for the issues part and make it more simpler
-	// - [ ] Look into simpler retry logic
 	log := s.log.With(logger.WithIssue(summary.Number))
 
 	// We still have to process an issue irrespective of its issue stage(through the label)
@@ -195,11 +189,31 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 		}
 	}
 
+	maxCommentID := int64(0)
+	for _, c := range issue.Comments {
+		if c.ID > maxCommentID {
+			maxCommentID = c.ID
+		}
+	}
+
 	// If the issue has no progress tags than process it as new.
 	if ifNew {
 		log.Info("issue: new issue", zap.String("title", issue.Title), zap.String("phase", "triaging issue"))
-		// TODO: Look into this function more and look it it caches stuff properly.
-		return s.runSpecStage(ctx, issue, "")
+		// TODO: Look into this function more and look if it caches stuff properly
+
+		err := s.runSpecStage(ctx, issue, "")
+		if err == nil {
+			rec := storage.IssueRecordFromModel(issue, models.StageSpecDone)
+			rec.LastCommentID = maxCommentID
+			_ = s.db.UpsertIssue(ctx, rec)
+		}
+		return err
+	}
+
+	if cached == nil {
+		rec := storage.IssueRecordFromModel(issue, models.StageNew)
+		rec.LastCommentID = maxCommentID
+		_ = s.db.UpsertIssue(ctx, rec)
 	}
 
 	// If not new issue, check if any comment unprocessed by our bot.
@@ -213,156 +227,170 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	for _, c := range issue.Comments {
 		isBot := s.BotUser != "" && c.Author == s.BotUser
 		if !isBot && !botRepliedTo[c.ID] && !slash.IsValidCommand(c.Body) {
+			done, _ := s.db.IsCommentProcessed(ctx, c.ID)
+			if done {
+				continue
+			}
 			log.Info("issue: process unresolved comment", zap.Int64("comment_id", c.ID), zap.String("phase", "triaging comment"))
 			// Process UnProcesed Comment.
-			// TODO: Add a func like s.runSpecStage() that either
-			// -> performs /grill-me to fetch more details
-			// -> propose a fix aka do an addon to the comment's problem, or talks.
-			// NOTE: does not create a spec
-			// NOTE: If fails, than dont reply comment
-			// NOTE: the output of the following at the end will be a replied comment to the addressing comment
+			// NOTE: If fails, than reply comment -> so we know something is failing
+			err := s.processIssueComment(ctx, issue, c)
+			if err == nil {
+				rec := storage.IssueRecordFromModel(issue, models.StageSpecOngoing)
+				rec.LastCommentID = maxCommentID
+				_ = s.db.UpsertIssue(ctx, rec)
+			}
+			return err
 		}
 	}
 
 	// Check is last comment is a slash one and handle it
-	// - /sloper spec (respecs with the feedback)
+	// - /sloper spec (respecs with the feedback) ;; REMAINING - NEED TO GIVE IT A DIFF PROCESS
+	// 											  ;; This should create a new spec - rn it is a feedback one.
 	// - /sloper approve (start work stage)
 	// Check for slash commands from human unprocessed comments
 	cmd := slash.ParseComments(issue.Comments[len(issue.Comments)-1:])
-		log.Info("scheduler: new slash commands detected",
-			zap.String("phase", "slash command processing"))
-	
-	// Add the caches, one to prevent 
+	if len(cmd) == 0 {
+		// This should actually never get executed : look into it and fix it where you can.
+		_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
+		return nil
+	}
+
+	log.Info("scheduler: new slash commands detected",
+		zap.String("phase", "slash command processing"))
+
+	// Add the caches, one to prevent
 	// Comments getting reprocessed everytime
 	// and commands getting reprocessed everytime. (Look into various table to add it to)
 	// Alot of the code at the end it not need tbh
 	return s.handleSlashCommand(ctx, issue, cmd[0])
 
-	// ---------------- Irrelevant code ----------------
-	// Cache all comments in DB, marking bot's own comments as processed.
-	// Exception: bot's /sloper commands stay unprocessed so they get handled.
+}
 
-	// Modify the behaviour.
-	// UnProcessed comments are those without a quote reply from our account.
-	// This also include comments from out account as well.
+func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueDetail, unprocessedComment models.CommentInfo) error {
+	log := s.log.With(logger.WithIssue(issue.Number), logger.WithStage("spec"))
 
-	// TODO: Handle caching to be done after the comment is processed,
-	// Not RN
-	// ---------------------------------------------------------------------------
-	// for _, c := range issue.Comments {
-	// 	isBot := s.BotUser != "" && c.Author == s.BotUser
-	// 	isSloperCmd := slash.IsValidCommand(c.Body)
-	// 	_ = s.db.InsertComment(ctx, storage.CommentRecord{
-	// 		ID:           c.ID,
-	// 		IssueNumber:  issue.Number,
-	// 		Author:       c.Author,
-	// 		Body:         c.Body,
-	// 		CreatedAt:    c.CreatedAt,
-	// 		Processed:    isBot && !isSloperCmd,
-	// 		InReplyToID:  c.InReplyToID,
-	// 		RepliedByBot: botRepliedTo[c.ID],
-	// 	})
-	// }
+	runID, _ := s.db.StartRun(ctx, issue.Number, "spec")
 
-	// ----------------------------------------------------------------------
-	// TODO: Leaving cleaning and review from here :
-	// ----------------------------------------------------------------------
+	log.Info("scheduler: starting TRIAGE COMMENT stage")
+	s.db.AppendEvent(ctx, storage.EventRecord{
+		IssueNumber: issue.Number,
+		EventType:   "spec.started",
+		Stage:       "spec",
+	})
 
-	maxCommentID := int64(0)
-	for _, c := range issue.Comments {
-		if c.ID > maxCommentID {
-			maxCommentID = c.ID
-		}
-	}
-
-	stage := models.StageNew
-	if cached != nil {
-		stage = cached.Stage
-	}
-
-	rec := storage.IssueRecordFromModel(issue, stage)
-	rec.LastCommentID = maxCommentID
-	if cached != nil {
-		rec.SpecJSON = cached.SpecJSON
-		rec.BranchName = cached.BranchName
-		rec.PRNumber = cached.PRNumber
-		rec.ReviewIterations = cached.ReviewIterations
-	}
-
-	if cached == nil {
-		log.Info("scheduler: uncached issue detected",
-			zap.String("title", issue.Title), zap.Int("comments", len(issue.Comments)))
-		return s.runSpecStage(ctx, issue, "")
-	}
-
-	log.Info("scheduler: processing existing issue",
-		zap.String("title", issue.Title),
-		zap.String("stage", stage))
-
-	// Update the cached issue record with the latest GitHub state.
-	// This prevents re-processing on the next tick just because updatedAt changed.
-	_ = s.db.UpsertIssue(ctx, rec)
-
-	// Issues past SPEC stage are handled by dedicated processors
-	// (processApprovedIssues, processWorkDoneIssues, etc.).
-	// Don't re-triage or re-process slash commands for them.
-	if stage == models.StageApproved || stage == models.StageWorkDone ||
-		stage == models.StageReviewDone || stage == models.StageMerged {
-		_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
-		return nil
-	}
-
-	// Check for unprocessed comments (bot comments are auto-marked processed)
-	unprocessed, err := s.db.GetUnprocessedComments(ctx, issue.Number)
+	resp, err := s.pl.ProcessIssueComment(ctx, issue, unprocessedComment.Body, s.specSessionID(issue.Number))
 	if err != nil {
-		return fmt.Errorf("get unprocessed comments: %w", err)
+		s.db.FailRun(ctx, runID, err.Error())
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "spec.failed",
+			Stage:       "spec",
+			Message:     err.Error(),
+		})
+		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
+		return fmt.Errorf("spec: %w", err)
+	}
+	var _type string
+	switch resp.Type {
+	case int(models.CommentPropose):
+		_type = "Proposed"
+	case int(models.CommentGrillme):
+		_type = "GrillMe"
+	default:
+		_type = "Unknown"
 	}
 
-	// Filter to only HUMAN unprocessed comments, plus bot /sloper commands.
-	var humanUnprocessed []storage.CommentRecord
-	for _, c := range unprocessed {
-		if s.BotUser != "" && c.Author == s.BotUser && !slash.IsValidCommand(c.Body) {
-			_ = s.db.MarkCommentProcessed(ctx, c.ID)
-			continue
-		}
-		humanUnprocessed = append(humanUnprocessed, c)
-	}
+	log.Info("scheduler: comment processed",
+		zap.String("type", _type))
 
-	// Check for slash commands from human unprocessed comments
-	commands := slash.ParseComments(issue.Comments)
-	hasNewCommands := false
-	for _, c := range humanUnprocessed {
-		if slash.IsValidCommand(c.Body) {
-			hasNewCommands = true
-		}
-	}
-
-	if hasNewCommands {
-		log.Info("scheduler: new slash commands detected",
-			zap.Int("unprocessed", len(humanUnprocessed)))
-		return s.handleSlashCommand(ctx, issue, commands[0])
-	}
-
-	// Check for new human comments (not from bot) that would trigger re-triage
-	newHumanCommentID := int64(0)
-	for _, c := range issue.Comments {
-		isBot := s.BotUser != "" && c.Author == s.BotUser
-		if !isBot && c.ID > cached.LastCommentID {
-			if c.ID > newHumanCommentID {
-				newHumanCommentID = c.ID
+	if resp.Type == int(models.CommentUnknown) {
+		log.Warn("scheduler: comment response could not be classified",
+			zap.Int("raw_output_len", len(resp.RawOutput)))
+		if len(resp.RawOutput) > 0 {
+			preview := resp.RawOutput
+			if len(preview) > 1000 {
+				preview = preview[:1000] + "...(truncated)"
 			}
+			log.Warn("scheduler: raw agent output", zap.String("output", preview))
 		}
+
+		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
+		s.db.FailRun(ctx, runID, "comment response could not be classified")
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "spec.unclassified_response",
+			Stage:       "spec",
+			Message:     "agent response type could not be determined",
+		})
+		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
+		return fmt.Errorf("spec: unclassifiable comment response")
 	}
 
-	if newHumanCommentID > 0 {
-		log.Info("scheduler: new human comments detected, re-triaging")
-		feedback := collectFeedbackFromCommentsExcludingBot(issue.Comments, cached.LastCommentID, s.BotUser)
-		_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
-		return s.runSpecStage(ctx, issue, feedback)
+	if resp.Type == int(models.CommentPropose) && (resp.Summary == "" || len(resp.FilesToChange) == 0) {
+		log.Warn("scheduler: proposed comment response has empty fields — agent output may not have been parsed correctly",
+			zap.String("summary", resp.Summary),
+			zap.Int("files_count", len(resp.FilesToChange)),
+			zap.Int("raw_output_len", len(resp.RawOutput)))
+		if len(resp.RawOutput) > 0 {
+			preview := resp.RawOutput
+			if len(preview) > 1000 {
+				preview = preview[:1000] + "...(truncated)"
+			}
+			log.Warn("scheduler: raw agent output", zap.String("output", preview))
+		}
+
+		// Agent produced no usable output — likely an LLM error.
+		// Post an error comment and mark as failed (don't proceed to WORK).
+		isError := strings.Contains(resp.RawOutput, "\"stopReason\":\"error\"") ||
+			strings.Contains(resp.RawOutput, "error") ||
+			strings.Contains(resp.RawOutput, "Error")
+
+		if isError {
+			errMsg := resp.RawOutput
+			if len(errMsg) > 2000 {
+				errMsg = errMsg[:2000] + "..."
+			}
+			s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID,
+				quoteReplyBody(unprocessedComment.Body,
+					fmt.Sprintf("## Sloper encountered an error during analysis\n\n"+
+						"```\n%s\n```\n\nPlease check the model/provider configuration "+
+						"in `.env` (AGENT_MODEL, AGENT_PROVIDER, AGENT_KEY).\n\n"+
+						"Use `/sloper retry` to try again after fixing the configuration.",
+						errMsg)))
+		}
+
+		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
+		s.db.FailRun(ctx, runID, "agent produced empty output — likely LLM error")
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: issue.Number,
+			EventType:   "spec.empty_output",
+			Stage:       "spec",
+			Message:     "agent produced empty spec output",
+		})
+		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
+		return fmt.Errorf("spec: agent produced empty output")
 	}
 
-	// No new human comments — just update last_comment_id to include bot comments
-	_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
+	s.transitionIssueStage(ctx, issue.Number, models.StageSpecDone)
+	responseComment := quoteReplyBody(unprocessedComment.Body, formatResponseComment(resp, issue.Number))
+
+	if err := s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID, responseComment); err != nil {
+		log.Warn("scheduler: failed to post spec comment", zap.Error(err))
+	} else {
+		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
+	}
+
+	if err := s.ghClient.AddIssueLabel(ctx, s.RepoName, issue.Number, models.TRIAGED_LABEL); err != nil {
+		log.Warn("scheduler: failed to add triaged label", zap.Error(err))
+	}
+
+	s.db.AppendEvent(ctx, storage.EventRecord{
+		IssueNumber: issue.Number,
+		EventType:   "spec.replyComment",
+		Stage:       "replyCommnet",
+		Message:     _type,
+	})
 
 	return nil
 }
@@ -502,9 +530,6 @@ func (s *Scheduler) handleSlashCommand(
 		if err := s.runSpecStage(ctx, issue, cmd.Feedback); err != nil {
 			return fmt.Errorf("revise spec: %w", err)
 		}
-
-
-
 
 	case slash.CmdRevise:
 		s.db.AppendEvent(ctx, storage.EventRecord{
@@ -982,6 +1007,54 @@ func (s *Scheduler) runFixStage(ctx context.Context, rec storage.IssueRecord, re
 }
 
 // ─── Formatting helpers ──────────────────────────────────────────────
+
+func quoteReplyBody(original, response string) string {
+	trimmed := strings.TrimSpace(original)
+	if trimmed == "" {
+		return response
+	}
+	return "> " + strings.ReplaceAll(trimmed, "\n", "\n> ") + "\n\n" + response
+}
+
+func (s *Scheduler) markCommentProcessed(ctx context.Context, issueNumber int64, c models.CommentInfo) {
+	_ = s.db.InsertComment(ctx, storage.CommentRecord{
+		ID:          c.ID,
+		IssueNumber: issueNumber,
+		Author:      c.Author,
+		Body:        c.Body,
+		CreatedAt:   c.CreatedAt,
+	})
+	_ = s.db.MarkCommentProcessed(ctx, c.ID)
+}
+
+func formatResponseComment(spec *models.ProcessCommentResult, issueNumber int64) string {
+	var b strings.Builder
+	if spec.Type == int(models.CommentPropose) {
+		b.WriteString("For this we can:\n")
+		b.WriteString(fmt.Sprintf("%s\n\n", spec.Summary))
+		b.WriteString("This will include the following file changes:\n")
+		if len(spec.FilesToChange) > 0 {
+			for _, f := range spec.FilesToChange {
+				b.WriteString(fmt.Sprintf("- `%s`\n", f))
+			}
+		} else {
+			b.WriteString("_To be determined during implementation_\n")
+		}
+	} else if spec.Type == int(models.CommentGrillme) {
+		b.WriteString("Before I propose a possible fix, i would like to get a clarification on these question\n\n")
+		if len(spec.Questions) > 0 {
+			for _, f := range spec.Questions {
+				b.WriteString(fmt.Sprintf("- `%s`\n", f))
+			}
+		} else {
+			b.WriteString("_no questions_\n")
+		}
+	} else {
+		b.WriteString("## I could not conclude what I wanted to do ?? Look into debug logs")
+	}
+
+	return b.String()
+}
 
 func formatSpecComment(spec *models.SpecResult, issueNumber int64) string {
 	var b strings.Builder

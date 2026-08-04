@@ -30,6 +30,15 @@ func (p *Pipeline) SpecIssue(ctx context.Context, issue models.IssueDetail, feed
 	return parseSpecResult(out.Text), nil
 }
 
+// Processes an IssueComment runs the SPEC stage: analyzes an issue comment and produces a plan.
+func (p *Pipeline) ProcessIssueComment(ctx context.Context, issue models.IssueDetail, unprocessedComment string, sessionID string) (*models.ProcessCommentResult, error) {
+	out, err := p.ag.RunStageWithCWD(ctx, buildProcessCommentPrompt(issue, unprocessedComment), "", sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("process comment: %w", err)
+	}
+	return parseCommentSpecResult(out.Text), nil
+}
+
 // ImplementFix runs the WORK stage: implements the spec plan.
 // worktreePath is the CWD for the agent (a git worktree).
 // feedback is optional — pass user feedback when re-working based on comments.
@@ -79,6 +88,30 @@ func extractJSONBlock(text string, dst any) {
 		}
 	}
 	_ = json.Unmarshal([]byte(text), dst)
+}
+
+func parseCommentSpecResult(text string) *models.ProcessCommentResult {
+	r := &models.ProcessCommentResult{RawOutput: text}
+
+	var parsedPropose models.ProcessCommentProposeParse
+	var parsedGrill models.ProcessCommentGrillParse
+
+	extractJSONBlock(text, &parsedPropose)
+	if parsedPropose.FilesToChange != nil || parsedPropose.Summary != "" {
+		r.Type = int(models.CommentPropose)
+		r.Summary = parsedPropose.Summary
+		r.FilesToChange = parsedPropose.FilesToChange
+		return r
+	}
+
+	extractJSONBlock(text, &parsedGrill)
+	if parsedGrill.GrillMe {
+		r.Type = int(models.CommentGrillme)
+		r.Questions = parsedGrill.Questions
+		return r
+	}
+	r.Type = int(models.CommentUnknown)
+	return r
 }
 
 func parseSpecResult(text string) *models.SpecResult {
