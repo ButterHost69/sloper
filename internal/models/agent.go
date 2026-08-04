@@ -114,6 +114,38 @@ type SpecResult struct {
 	RawOutput          string   `json:"-"`
 }
 
+type CommentResult int
+
+const (
+	CommentPropose CommentResult = iota
+	CommentGrillme
+	CommentUnknown
+)
+
+type ProcessCommentResult struct {
+	Type               int   `json:"type"`                // "propose" | "grill"
+	Questions          []string `json:"questions"`           // grill
+	Summary            string   `json:"summary"`             // propose
+	FilesToChange      []string `json:"files_to_change"`     // propose
+	ImplementationPlan string   `json:"implementation_plan"` // propose
+	RawOutput          string   `json:"-"`                   // propse
+}
+
+// These are just midway structs to help parse the JSON output from the agent.
+// The final result is a ProcessCommentResult, which can be either a grill or a spec.
+type ProcessCommentGrillParse struct {
+	Type      string   `json:"type"`      // "grill"
+	Questions []string `json:"questions"` // grill
+	RawOutput string   `json:"-"`         // grill
+}
+
+type ProcessCommentProposeParse struct {
+	Summary            string   `json:"summary"`             // spec
+	FilesToChange      []string `json:"files_to_change"`     // spec
+	ImplementationPlan string   `json:"implementation_plan"` // spec
+	RawOutput          string   `json:"-"`                   // spec
+}
+
 // WorkResult is the agent's output from the WORK stage.
 type WorkResult struct {
 	BranchName string `json:"branch_name"`
