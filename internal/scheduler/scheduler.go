@@ -195,11 +195,26 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 		}
 	}
 
+	maxCommentID := int64(0)
+	for _, c := range issue.Comments {
+		if c.ID > maxCommentID {
+			maxCommentID = c.ID
+		}
+	}
+
 	// If the issue has no progress tags than process it as new.
 	if ifNew {
 		log.Info("issue: new issue", zap.String("title", issue.Title), zap.String("phase", "triaging issue"))
-		// TODO: Look into this function more and look if it caches stuff properly.
-		return s.runSpecStage(ctx, issue, "")
+		// TODO: Look into this function more and look if it caches stuff properly
+		err := s.runSpecStage(ctx, issue, "")
+		
+		log.Info("issue: new issue processed", zap.String("title", summary.Title))
+
+		rec := storage.IssueRecordFromModel(issue, models.StageNew)
+		rec.LastCommentID = maxCommentID
+		_ = s.db.UpsertIssue(ctx, rec)
+
+		return err
 	}
 
 	// If not new issue, check if any comment unprocessed by our bot.
@@ -273,7 +288,7 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	// TODO: Leaving cleaning and review from here :
 	// ----------------------------------------------------------------------
 
-	maxCommentID := int64(0)
+	maxCommentID = int64(0)
 	for _, c := range issue.Comments {
 		if c.ID > maxCommentID {
 			maxCommentID = c.ID
