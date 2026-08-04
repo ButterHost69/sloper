@@ -156,12 +156,6 @@ func (s *Scheduler) tick(ctx context.Context) {
 }
 
 func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSummary) error {
-	// Changes to be made:
-	// - [ ] Remove the way a comment is marked as processed.
-	// 		 Use quote reply from our account to mark a comment as processed.
-	// - [ ] Comments can now be questions(grill-me), or suggestions, or specs.
-	// - [ ] Look into the storage cluster fuck for the issues part and make it more simpler
-	// - [ ] Look into simpler retry logic
 	log := s.log.With(logger.WithIssue(summary.Number))
 
 	// We still have to process an issue irrespective of its issue stage(through the label)
@@ -216,6 +210,12 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 		return err
 	}
 
+	if cached == nil {
+		rec := storage.IssueRecordFromModel(issue, models.StageNew)
+		rec.LastCommentID = maxCommentID
+		_ = s.db.UpsertIssue(ctx, rec)
+	}
+
 	// If not new issue, check if any comment unprocessed by our bot.
 	botRepliedTo := make(map[int64]bool)
 	for _, c := range issue.Comments {
@@ -233,18 +233,20 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 			}
 			log.Info("issue: process unresolved comment", zap.Int64("comment_id", c.ID), zap.String("phase", "triaging comment"))
 			// Process UnProcesed Comment.
-			// TODO: Add a func like s.runSpecStage() that either
-			// -> performs /grill-me to fetch more details
-			// -> propose a fix aka do an addon to the comment's problem, or talks.
-			// NOTE: does not create a spec
-			// NOTE: If fails, than dont reply comment
-			// NOTE: the output of the following at the end will be a replied comment to the addressing comment
-			return s.processIssueComment(ctx, issue, c)
+			// NOTE: If fails, than reply comment -> so we know something is failing
+			err := s.processIssueComment(ctx, issue, c)
+			if err == nil {
+				rec := storage.IssueRecordFromModel(issue, models.StageSpecOngoing)
+				rec.LastCommentID = maxCommentID
+				_ = s.db.UpsertIssue(ctx, rec)
+			}
+			return err
 		}
 	}
 
 	// Check is last comment is a slash one and handle it
-	// - /sloper spec (respecs with the feedback)
+	// - /sloper spec (respecs with the feedback) ;; REMAINING - NEED TO GIVE IT A DIFF PROCESS
+	// 											  ;; This should create a new spec - rn it is a feedback one.
 	// - /sloper approve (start work stage)
 	// Check for slash commands from human unprocessed comments
 	cmd := slash.ParseComments(issue.Comments[len(issue.Comments)-1:])
@@ -263,133 +265,6 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	// Alot of the code at the end it not need tbh
 	return s.handleSlashCommand(ctx, issue, cmd[0])
 
-	// ---------------- Irrelevant code ----------------
-	// Cache all comments in DB, marking bot's own comments as processed.
-	// Exception: bot's /sloper commands stay unprocessed so they get handled.
-
-	// Modify the behaviour.
-	// UnProcessed comments are those without a quote reply from our account.
-	// This also include comments from out account as well.
-
-	// TODO: Handle caching to be done after the comment is processed,
-	// Not RN
-	// ---------------------------------------------------------------------------
-	// for _, c := range issue.Comments {
-	// 	isBot := s.BotUser != "" && c.Author == s.BotUser
-	// 	isSloperCmd := slash.IsValidCommand(c.Body)
-	// 	_ = s.db.InsertComment(ctx, storage.CommentRecord{
-	// 		ID:           c.ID,
-	// 		IssueNumber:  issue.Number,
-	// 		Author:       c.Author,
-	// 		Body:         c.Body,
-	// 		CreatedAt:    c.CreatedAt,
-	// 		Processed:    isBot && !isSloperCmd,
-	// 		InReplyToID:  c.InReplyToID,
-	// 		RepliedByBot: botRepliedTo[c.ID],
-	// 	})
-	// }
-
-	// ----------------------------------------------------------------------
-	// TODO: Leaving cleaning and review from here :
-	// ----------------------------------------------------------------------
-
-	maxCommentID = int64(0)
-	for _, c := range issue.Comments {
-		if c.ID > maxCommentID {
-			maxCommentID = c.ID
-		}
-	}
-
-	stage := models.StageNew
-	if cached != nil {
-		stage = cached.Stage
-	}
-
-	rec := storage.IssueRecordFromModel(issue, stage)
-	rec.LastCommentID = maxCommentID
-	if cached != nil {
-		rec.SpecJSON = cached.SpecJSON
-		rec.BranchName = cached.BranchName
-		rec.PRNumber = cached.PRNumber
-		rec.ReviewIterations = cached.ReviewIterations
-	}
-
-	if cached == nil {
-		log.Info("scheduler: uncached issue detected",
-			zap.String("title", issue.Title), zap.Int("comments", len(issue.Comments)))
-		return s.runSpecStage(ctx, issue, "")
-	}
-
-	log.Info("scheduler: processing existing issue",
-		zap.String("title", issue.Title),
-		zap.String("stage", stage))
-
-	// Update the cached issue record with the latest GitHub state.
-	// This prevents re-processing on the next tick just because updatedAt changed.
-	_ = s.db.UpsertIssue(ctx, rec)
-
-	// Issues past SPEC stage are handled by dedicated processors
-	// (processApprovedIssues, processWorkDoneIssues, etc.).
-	// Don't re-triage or re-process slash commands for them.
-	if stage == models.StageApproved || stage == models.StageWorkDone ||
-		stage == models.StageReviewDone || stage == models.StageMerged {
-		_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
-		return nil
-	}
-
-	// Check for unprocessed comments (bot comments are auto-marked processed)
-	unprocessed, err := s.db.GetUnprocessedComments(ctx, issue.Number)
-	if err != nil {
-		return fmt.Errorf("get unprocessed comments: %w", err)
-	}
-
-	// Filter to only HUMAN unprocessed comments, plus bot /sloper commands.
-	var humanUnprocessed []storage.CommentRecord
-	for _, c := range unprocessed {
-		if s.BotUser != "" && c.Author == s.BotUser && !slash.IsValidCommand(c.Body) {
-			_ = s.db.MarkCommentProcessed(ctx, c.ID)
-			continue
-		}
-		humanUnprocessed = append(humanUnprocessed, c)
-	}
-
-	// Check for slash commands from human unprocessed comments
-	commands := slash.ParseComments(issue.Comments)
-	hasNewCommands := false
-	for _, c := range humanUnprocessed {
-		if slash.IsValidCommand(c.Body) {
-			hasNewCommands = true
-		}
-	}
-
-	if hasNewCommands {
-		log.Info("scheduler: new slash commands detected",
-			zap.Int("unprocessed", len(humanUnprocessed)))
-		return s.handleSlashCommand(ctx, issue, commands[0])
-	}
-
-	// Check for new human comments (not from bot) that would trigger re-triage
-	newHumanCommentID := int64(0)
-	for _, c := range issue.Comments {
-		isBot := s.BotUser != "" && c.Author == s.BotUser
-		if !isBot && c.ID > cached.LastCommentID {
-			if c.ID > newHumanCommentID {
-				newHumanCommentID = c.ID
-			}
-		}
-	}
-
-	if newHumanCommentID > 0 {
-		log.Info("scheduler: new human comments detected, re-triaging")
-		feedback := collectFeedbackFromCommentsExcludingBot(issue.Comments, cached.LastCommentID, s.BotUser)
-		_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
-		return s.runSpecStage(ctx, issue, feedback)
-	}
-
-	// No new human comments — just update last_comment_id to include bot comments
-	_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
-
-	return nil
 }
 
 func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueDetail, unprocessedComment models.CommentInfo) error {
