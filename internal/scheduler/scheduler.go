@@ -221,6 +221,11 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 			// NOTE: does not create a spec
 			// NOTE: If fails, than dont reply comment
 			// NOTE: the output of the following at the end will be a replied comment to the addressing comment
+			return s.processIssueComment(
+				ctx,
+				issue,
+				c,
+			)
 		}
 	}
 
@@ -451,7 +456,7 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 	s.transitionIssueStage(ctx, issue.Number, models.StageSpecDone)
 	responseComment := formatResponseComment(resp, issue.Number)
 
-	if err := s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID,responseComment); err != nil {
+	if err := s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID, responseComment); err != nil {
 		log.Warn("scheduler: failed to post spec comment", zap.Error(err))
 	}
 
@@ -1113,7 +1118,7 @@ func formatResponseComment(spec *models.ProcessCommentResult, issueNumber int64)
 		}
 	} else {
 		b.WriteString("## I could not conclude what I wanted to do ?? Look into debug logs")
-	}	
+	}
 
 	return b.String()
 }
