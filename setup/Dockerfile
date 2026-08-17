@@ -33,11 +33,15 @@ RUN . "$NVM_DIR/nvm.sh" && npm install -g --ignore-scripts @earendil-works/pi-co
 
 COPY ./script.sh ./setup.sh
 COPY ./sloper /usr/local/bin/sloper
+COPY ./sloper-web /usr/local/bin/sloper-web
 COPY ./skills/ ~/.pi/agent/skills/ 
 
 RUN mkdir -p ~/repo
 RUN chmod +x /setup.sh
 RUN chmod +x /usr/local/bin/sloper
+RUN chmod +x /usr/local/bin/sloper-web
+
+EXPOSE 8080
 
 ENTRYPOINT ["bash", "/setup.sh"]
 CMD []

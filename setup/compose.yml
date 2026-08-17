@@ -4,6 +4,10 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    ports:
+      - "${SLOPER_WEB_PORT:-8080}:8080"
+    environment:
+      - SLOPER_WEB_PORT=8080
     volumes:
       - sloper_data:/root/.sloper
       - sloper_repo:/root/repo
