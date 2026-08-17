@@ -32,9 +32,10 @@ type AgentEvent struct {
 
 // AgentMessage is the message object inside message_start / message_end events.
 type AgentMessage struct {
-	Role       string             `json:"role"` // user | assistant | toolResult | custom
-	Content    []AgentContentPart `json:"content"`
-	StopReason string             `json:"stopReason,omitempty"`
+	Role         string             `json:"role"` // user | assistant | toolResult | custom
+	Content      []AgentContentPart `json:"content"`
+	StopReason   string             `json:"stopReason,omitempty"`
+	ErrorMessage string             `json:"errorMessage,omitempty"`
 }
 
 // AgentContentPart is one part of a message's content array.
