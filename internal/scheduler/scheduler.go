@@ -197,16 +197,24 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	}
 
 	// If the issue has no progress tags than process it as new.
-	if ifNew {
+	// Only auto-run spec the very first time we see the issue (cached == nil).
+	// A cached issue without the triaged label was already attempted (e.g. it
+	// failed) — don't re-run spec every tick; fall through so new comments and
+	// slash commands (like /sloper retry) are still handled.
+	if ifNew && cached == nil {
 		log.Info("issue: new issue", zap.String("title", issue.Title), zap.String("phase", "triaging issue"))
 		// TODO: Look into this function more and look if it caches stuff properly
 
 		err := s.runSpecStage(ctx, issue, "")
-		if err == nil {
-			rec := storage.IssueRecordFromModel(issue, models.StageSpecDone)
-			rec.LastCommentID = maxCommentID
-			_ = s.db.UpsertIssue(ctx, rec)
+		stage := models.StageSpecDone
+		if err != nil {
+			// Persist the failure so the issue isn't re-treated as brand-new
+			// (and re-spec'd) on every tick while the model is down.
+			stage = models.StageFailed
 		}
+		rec := storage.IssueRecordFromModel(issue, stage)
+		rec.LastCommentID = maxCommentID
+		_ = s.db.UpsertIssue(ctx, rec)
 		return err
 	}
 
@@ -249,6 +257,10 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	// 											  ;; This should create a new spec - rn it is a feedback one.
 	// - /sloper approve (start work stage)
 	// Check for slash commands from human unprocessed comments
+	if len(issue.Comments) == 0 {
+		_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID)
+		return nil
+	}
 	cmd := slash.ParseComments(issue.Comments[len(issue.Comments)-1:])
 	if len(cmd) == 0 {
 		// This should actually never get executed : look into it and fix it where you can.
@@ -413,7 +425,9 @@ func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, 
 			log.Warn("scheduler: failed to post spec failure comment", zap.Error(cerr))
 		}
 		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
-		return fmt.Errorf("spec: %w", err)
+		// SpecIssue already wraps the error with "spec:", so return it unwrapped
+		// to avoid a doubled "spec: spec: ..." prefix.
+		return err
 	}
 
 	if spec.Summary == "" || len(spec.FilesToChange) == 0 || spec.ImplementationPlan == "" {
