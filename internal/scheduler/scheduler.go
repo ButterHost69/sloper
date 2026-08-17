@@ -288,6 +288,9 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 			Stage:       "spec",
 			Message:     err.Error(),
 		})
+		s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID,
+			quoteReplyBody(unprocessedComment.Body, formatFailureBody("spec", err)))
+		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
 		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
 		return fmt.Errorf("spec: %w", err)
 	}
@@ -323,6 +326,9 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 			Stage:       "spec",
 			Message:     "agent response type could not be determined",
 		})
+		s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID,
+			quoteReplyBody(unprocessedComment.Body, formatFailureBody("spec",
+				fmt.Errorf("the agent's response could not be classified"))))
 		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
 		return fmt.Errorf("spec: unclassifiable comment response")
 	}
@@ -340,34 +346,20 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 			log.Warn("scheduler: raw agent output", zap.String("output", preview))
 		}
 
-		// Agent produced no usable output — likely an LLM error.
-		// Post an error comment and mark as failed (don't proceed to WORK).
-		isError := strings.Contains(resp.RawOutput, "\"stopReason\":\"error\"") ||
-			strings.Contains(resp.RawOutput, "error") ||
-			strings.Contains(resp.RawOutput, "Error")
-
-		if isError {
-			errMsg := resp.RawOutput
-			if len(errMsg) > 2000 {
-				errMsg = errMsg[:2000] + "..."
-			}
-			s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID,
-				quoteReplyBody(unprocessedComment.Body,
-					fmt.Sprintf("## Sloper encountered an error during analysis\n\n"+
-						"```\n%s\n```\n\nPlease check the model/provider configuration "+
-						"in `.env` (AGENT_MODEL, AGENT_PROVIDER, AGENT_KEY).\n\n"+
-						"Use `/sloper retry` to try again after fixing the configuration.",
-						errMsg)))
-		}
-
+		// Agent settled but produced no usable output. Model-level failures
+		// (stopReason "error") now surface as errors from the pipeline call,
+		// so reaching here means genuinely unparseable/empty output.
 		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
-		s.db.FailRun(ctx, runID, "agent produced empty output — likely LLM error")
+		s.db.FailRun(ctx, runID, "agent produced empty output")
 		s.db.AppendEvent(ctx, storage.EventRecord{
 			IssueNumber: issue.Number,
 			EventType:   "spec.empty_output",
 			Stage:       "spec",
 			Message:     "agent produced empty spec output",
 		})
+		s.ghClient.ReplyToIssueComment(ctx, s.RepoName, issue.Number, unprocessedComment.ID,
+			quoteReplyBody(unprocessedComment.Body, formatFailureBody("spec",
+				fmt.Errorf("the agent returned an empty or unparseable response"))))
 		s.markCommentProcessed(ctx, issue.Number, unprocessedComment)
 		return fmt.Errorf("spec: agent produced empty output")
 	}
@@ -417,6 +409,9 @@ func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, 
 			Stage:       "spec",
 			Message:     err.Error(),
 		})
+		if cerr := s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number, formatFailureBody("spec", err)); cerr != nil {
+			log.Warn("scheduler: failed to post spec failure comment", zap.Error(cerr))
+		}
 		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
 		return fmt.Errorf("spec: %w", err)
 	}
@@ -435,33 +430,21 @@ func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, 
 			log.Warn("scheduler: raw agent output", zap.String("output", preview))
 		}
 
-		// Agent produced no usable output — likely an LLM error.
-		// Post an error comment and mark as failed (don't proceed to WORK).
-		isError := strings.Contains(spec.RawOutput, "\"stopReason\":\"error\"") ||
-			strings.Contains(spec.RawOutput, "error") ||
-			strings.Contains(spec.RawOutput, "Error")
-
-		if isError {
-			errMsg := spec.RawOutput
-			if len(errMsg) > 2000 {
-				errMsg = errMsg[:2000] + "..."
-			}
-			s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
-				fmt.Sprintf("## Sloper encountered an error during analysis\n\n"+
-					"```\n%s\n```\n\nPlease check the model/provider configuration "+
-					"in `.env` (AGENT_MODEL, AGENT_PROVIDER, AGENT_KEY).\n\n"+
-					"Use `/sloper retry` to try again after fixing the configuration.",
-					errMsg))
-		}
-
+		// Agent settled but produced no usable output. Model-level failures
+		// (stopReason "error") now surface as errors from the pipeline call,
+		// so reaching here means genuinely unparseable/empty output.
 		s.transitionIssueStage(ctx, issue.Number, models.StageFailed)
-		s.db.FailRun(ctx, runID, "agent produced empty output — likely LLM error")
+		s.db.FailRun(ctx, runID, "agent produced empty output")
 		s.db.AppendEvent(ctx, storage.EventRecord{
 			IssueNumber: issue.Number,
 			EventType:   "spec.empty_output",
 			Stage:       "spec",
 			Message:     "agent produced empty spec output",
 		})
+		if cerr := s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
+			formatFailureBody("spec", fmt.Errorf("the agent returned an empty or unparseable response"))); cerr != nil {
+			log.Warn("scheduler: failed to post spec failure comment", zap.Error(cerr))
+		}
 		return fmt.Errorf("spec: agent produced empty output")
 	}
 
@@ -575,6 +558,11 @@ func (s *Scheduler) handleSlashCommand(
 		s.transitionIssueStage(ctx, issue.Number, models.StageNew)
 		_ = s.db.UpdateIssueSpec(ctx, issue.Number, "")
 		if err := s.runSpecStage(ctx, issue, ""); err != nil {
+			// runSpecStage already posted the failure comment. Mark the retry
+			// command as processed so a failed run doesn't auto-repeat every tick;
+			// recovery is user-driven via a new /sloper retry.
+			_ = s.db.MarkCommentProcessed(ctx, cmd.CommentID)
+			_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID(issue.Comments))
 			return fmt.Errorf("retry spec: %w", err)
 		}
 	}
@@ -669,6 +657,9 @@ func (s *Scheduler) runWorkStage(ctx context.Context, rec storage.IssueRecord) e
 				Stage:       "work",
 				Message:     err.Error(),
 			})
+			if cerr := s.ghClient.PostIssueComment(ctx, s.RepoName, rec.Number, formatFailureBody("work", err)); cerr != nil {
+				log.Warn("scheduler: failed to post work failure comment", zap.Error(cerr))
+			}
 			s.transitionIssueStage(ctx, rec.Number, models.StageFailed)
 			return fmt.Errorf("implement: %w", err)
 		}
@@ -892,6 +883,19 @@ func (s *Scheduler) runReviewStage(ctx context.Context, rec storage.IssueRecord)
 		zap.Bool("approved", review.Approved),
 		zap.Int("issues", len(review.Issues)))
 
+	if !review.Approved && len(review.Issues) == 0 && len(review.Suggestions) == 0 {
+		log.Warn("scheduler: review requested changes but listed no issues")
+		s.db.FailRun(ctx, runID, "review produced no issues and did not approve")
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: rec.Number,
+			PRNumber:    rec.PRNumber,
+			EventType:   "review.invalid",
+			Stage:       "review",
+			Message:     "review returned not-approved with zero issues/suggestions",
+		})
+		return fmt.Errorf("review: agent returned no issues and did not approve")
+	}
+
 	if review.Approved {
 		s.db.CompleteRun(ctx, runID, review.RawOutput, "", "")
 		s.transitionIssueStage(ctx, rec.Number, models.StageReviewDone)
@@ -909,7 +913,9 @@ func (s *Scheduler) runReviewStage(ctx context.Context, rec storage.IssueRecord)
 	s.db.CompleteRun(ctx, runID, review.RawOutput, "", "")
 
 	reviewComment := formatReviewComment(review)
-	s.ghClient.PostPRComment(ctx, s.RepoName, rec.PRNumber, reviewComment)
+	if err := s.ghClient.PostPRComment(ctx, s.RepoName, rec.PRNumber, reviewComment); err != nil {
+		log.Warn("scheduler: failed to post review comment", zap.Error(err))
+	}
 
 	s.db.AppendEvent(ctx, storage.EventRecord{
 		IssueNumber: rec.Number,
@@ -967,6 +973,8 @@ func (s *Scheduler) runFixStage(ctx context.Context, rec storage.IssueRecord, re
 		return fmt.Errorf("reset to work branch: %w", err)
 	}
 
+	preFixSHA, _ := s.gitClient.GetHeadSHA(ctx, fixWtPath)
+
 	fixIteration := rec.ReviewIterations + 1
 	work, err := s.pl.FixReviewIssues(ctx, review, fixWtPath, s.fixSessionID(rec.Number, fixIteration))
 	if err != nil {
@@ -987,6 +995,22 @@ func (s *Scheduler) runFixStage(ctx context.Context, rec storage.IssueRecord, re
 			s.db.FailRun(ctx, runID, err.Error())
 			return fmt.Errorf("commit fix: %w", err)
 		}
+	}
+
+	postFixSHA, _ := s.gitClient.GetHeadSHA(ctx, fixWtPath)
+	if !hasChanges && postFixSHA == preFixSHA {
+		// The agent produced neither commits nor uncommitted changes — don't push a
+		// no-op. Count the cycle so the max-iteration guard can terminate the loop.
+		iters, _ := s.db.IncrementReviewIterations(ctx, rec.Number)
+		s.db.FailRun(ctx, runID, "fix produced no changes")
+		s.db.AppendEvent(ctx, storage.EventRecord{
+			IssueNumber: rec.Number,
+			PRNumber:    rec.PRNumber,
+			EventType:   "fix.no_changes",
+			Stage:       "fix",
+			Message:     "fix agent produced no changes",
+		})
+		return fmt.Errorf("fix: no changes produced (iteration %d)", iters)
 	}
 
 	if err := s.gitClient.PushRef(ctx, fixWtPath, "origin", "HEAD", rec.BranchName); err != nil {
@@ -1120,6 +1144,49 @@ func formatReviewComment(review *models.ReviewResult) string {
 	}
 	b.WriteString("\n_Applying fixes automatically..._")
 	return b.String()
+}
+
+// formatFailureBody renders a user-facing GitHub comment for a failed stage,
+// pointing the author at `/sloper retry` so they can re-trigger the pipeline.
+func formatFailureBody(stage string, err error) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("## Sloper encountered an error during the **%s** stage\n\n", stage))
+	errMsg := err.Error()
+	if len(errMsg) > 2000 {
+		errMsg = errMsg[:2000] + "..."
+	}
+	b.WriteString("```\n")
+	b.WriteString(errMsg)
+	b.WriteString("\n```\n\n")
+	b.WriteString("Use `/sloper retry` to try again.")
+	if looksLikeAgentConfigIssue(err) {
+		b.WriteString("\n\nIf the error above mentions the model or provider, check the configuration in `.env` (`AGENT_MODEL`, `AGENT_PROVIDER`, `AGENT_KEY`).")
+	}
+	return b.String()
+}
+
+// looksLikeAgentConfigIssue reports whether an error likely stems from the
+// agent model/provider configuration rather than a transient outage.
+func looksLikeAgentConfigIssue(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	for _, fragment := range []string{
+		"model",
+		"provider",
+		"api key",
+		"api_key",
+		"api-key",
+		"authentication",
+		"unauthorized",
+		"invalid api",
+	} {
+		if strings.Contains(message, fragment) {
+			return true
+		}
+	}
+	return false
 }
 
 func maxCommentID(comments []models.CommentInfo) int64 {

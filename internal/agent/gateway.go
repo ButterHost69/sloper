@@ -84,6 +84,11 @@ func collectUntilSettled(
 	var messageEndText string
 	var sawSettled bool
 	var eventCount int
+	// lastAssistantStopReason tracks the most recent assistant stop reason so a
+	// terminal model error is surfaced as an error instead of an empty success.
+	// It is updated on every assistant message_end, so a successful retry
+	// (will_retry followed by a new turn) clears an earlier error.
+	var lastAssistantStopReason string
 
 	for {
 		select {
@@ -120,6 +125,7 @@ func collectUntilSettled(
 						zap.String("role", evt.Message.Role),
 						zap.String("stop_reason", evt.Message.StopReason))
 					if evt.Message.Role == "assistant" {
+						lastAssistantStopReason = evt.Message.StopReason
 						msgText := extractMessageText(evt.Message)
 						if msgText != "" {
 							log.Warn("agent: assistant message_end text",
@@ -160,6 +166,17 @@ func collectUntilSettled(
 			// Settled = agent is done
 			if evt.IsSettled() {
 				sawSettled = true
+				if lastAssistantStopReason == "error" {
+					detail := messageEndText
+					if detail == "" {
+						detail = "assistant ended with stopReason \"error\""
+					}
+					log.Warn("agent: settled after model error",
+						zap.Int("events_seen", eventCount),
+						zap.String("detail", truncate(detail, 2000)))
+					return &StageOutput{Text: text.String(), Thinking: thinking.String()},
+						fmt.Errorf("agent: model error: %s", detail)
+				}
 				finalText := text.String()
 				if finalText == "" && messageEndText != "" {
 					finalText = messageEndText
