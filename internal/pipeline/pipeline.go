@@ -27,7 +27,7 @@ func (p *Pipeline) SpecIssue(ctx context.Context, issue models.IssueDetail, feed
 	if err != nil {
 		return nil, fmt.Errorf("spec: %w", err)
 	}
-	return parseSpecResult(out.Text), nil
+	return parseSpecResult(parseText(out)), nil
 }
 
 // Processes an IssueComment runs the SPEC stage: analyzes an issue comment and produces a plan.
@@ -36,7 +36,7 @@ func (p *Pipeline) ProcessIssueComment(ctx context.Context, issue models.IssueDe
 	if err != nil {
 		return nil, fmt.Errorf("process comment: %w", err)
 	}
-	return parseCommentSpecResult(out.Text), nil
+	return parseCommentSpecResult(parseText(out)), nil
 }
 
 // ImplementFix runs the WORK stage: implements the spec plan.
@@ -57,7 +57,7 @@ func (p *Pipeline) ReviewPR(ctx context.Context, diff, worktreePath, sessionID s
 	if err != nil {
 		return nil, fmt.Errorf("review: %w", err)
 	}
-	return parseReviewResult(out.Text), nil
+	return parseReviewResult(parseText(out)), nil
 }
 
 // FixReviewIssues runs the FIX stage: addresses review feedback.
@@ -72,22 +72,64 @@ func (p *Pipeline) FixReviewIssues(ctx context.Context, review *models.ReviewRes
 
 // ─── Response parsers ───────────────────────────────────────────────
 
-func extractJSONBlock(text string, dst any) {
-	start := strings.Index(text, "```json")
-	if start == -1 {
-		start = strings.Index(text, "```")
+// parseText picks the text the JSON parsers should read: the agent's final
+// answer (FinalText) when available, falling back to the full streamed text.
+func parseText(out *agent.StageOutput) string {
+	if strings.TrimSpace(out.FinalText) != "" {
+		return out.FinalText
 	}
-	if start != -1 {
-		start = strings.Index(text[start:], "\n") + start + 1
-		end := strings.Index(text[start:], "```")
-		if end != -1 {
-			block := strings.TrimSpace(text[start : start+end])
-			if json.Unmarshal([]byte(block), dst) == nil {
-				return
-			}
+	return out.Text
+}
+
+// extractJSONBlock scans every fenced code block (```json first, then bare ```)
+// and unmarshals the first one that parses into dst. A closing fence is a ```
+// that sits on its own line, so ``` appearing inside the JSON content (e.g. in
+// markdown plans) does not truncate the block. Falls back to parsing the whole
+// text as JSON.
+func extractJSONBlock(text string, dst any) {
+	for _, fence := range []string{"```json", "```"} {
+		if extractFencedBlocks(text, fence, dst) {
+			return
 		}
 	}
 	_ = json.Unmarshal([]byte(text), dst)
+}
+
+func extractFencedBlocks(text, fence string, dst any) bool {
+	rest := text
+	for {
+		start := strings.Index(rest, fence)
+		if start == -1 {
+			return false
+		}
+		contentStart := start + len(fence)
+		if nl := strings.Index(rest[contentStart:], "\n"); nl != -1 {
+			contentStart += nl + 1
+		}
+		search := contentStart
+		foundClose := false
+		for {
+			end := strings.Index(rest[search:], "```")
+			if end == -1 {
+				break
+			}
+			closePos := search + end
+			lineStart := strings.LastIndex(rest[:closePos], "\n") + 1
+			if strings.TrimSpace(rest[lineStart:closePos]) == "" {
+				block := strings.TrimSpace(rest[contentStart:closePos])
+				if json.Unmarshal([]byte(block), dst) == nil {
+					return true
+				}
+				rest = rest[closePos+3:]
+				foundClose = true
+				break
+			}
+			search = closePos + 3
+		}
+		if !foundClose {
+			return false
+		}
+	}
 }
 
 func parseCommentSpecResult(text string) *models.ProcessCommentResult {
@@ -148,6 +190,7 @@ func parseReviewResult(text string) *models.ReviewResult {
 }
 
 func firstLine(s string, maxLen int) string {
+	s = strings.TrimLeft(s, " \t\r\n")
 	if idx := strings.Index(s, "\n"); idx != -1 {
 		s = s[:idx]
 	}
