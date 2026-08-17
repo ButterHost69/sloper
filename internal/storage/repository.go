@@ -211,14 +211,14 @@ func (r *Repositories) GetIssuesByStage(ctx context.Context, stage string) ([]Is
 // ─── Issue Comment Repository ─────────────────────────────────────────
 
 type CommentRecord struct {
-	ID           int64
-	IssueNumber  int64
-	Author       string
-	Body         string
-	CreatedAt    string
-	Processed    bool
-	InReplyToID  int64
-	RepliedByBot bool
+	ID           int64  `json:"id"`
+	IssueNumber  int64  `json:"issue_number"`
+	Author       string `json:"author"`
+	Body         string `json:"body"`
+	CreatedAt    string `json:"created_at"`
+	Processed    bool   `json:"processed"`
+	InReplyToID  int64  `json:"in_reply_to_id"`
+	RepliedByBot bool   `json:"replied_by_bot"`
 }
 
 func (r *Repositories) InsertComment(ctx context.Context, c CommentRecord) error {
@@ -361,17 +361,17 @@ func (r *Repositories) GetPR(ctx context.Context, prNumber int64) (*PRRecord, er
 // ─── Run Repository ───────────────────────────────────────────────────
 
 type RunRecord struct {
-	ID             int64
-	IssueNumber    int64
-	Stage          string
-	Status         string
-	CheckpointJSON string
-	AgentOutput    string
-	AgentThinking  string
-	ShellLog       string
-	StartedAt      string
-	EndedAt        string
-	ErrorMessage   string
+	ID             int64  `json:"id"`
+	IssueNumber    int64  `json:"issue_number"`
+	Stage          string `json:"stage"`
+	Status         string `json:"status"`
+	CheckpointJSON string `json:"checkpoint_json"`
+	AgentOutput    string `json:"agent_output"`
+	AgentThinking  string `json:"agent_thinking"`
+	ShellLog       string `json:"shell_log"`
+	StartedAt      string `json:"started_at"`
+	EndedAt        string `json:"ended_at"`
+	ErrorMessage   string `json:"error_message"`
 }
 
 func (r *Repositories) StartRun(ctx context.Context, issueNumber int64, stage string) (int64, error) {
