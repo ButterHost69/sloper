@@ -9,6 +9,7 @@ import (
 	"github.com/ButterHost69/sloper/internal/models"
 	"github.com/ButterHost69/sloper/internal/scheduler"
 	"github.com/ButterHost69/sloper/internal/storage"
+	"github.com/ButterHost69/sloper/internal/version"
 	"github.com/ButterHost69/sloper/internal/worktree"
 	"go.uber.org/zap"
 )
@@ -32,6 +33,9 @@ func (r *Runtime) Start(ctx context.Context) {
 	}
 	log = logger.Default()
 
+	log.Info("runtime: sloper version",
+		zap.String("version", version.Version),
+		zap.String("repo", r.config.RepoPath))
 	log.Info("runtime: starting sloper", zap.String("repo", r.config.RepoPath))
 
 	dbPath := os.Getenv("SLOPER_DB_PATH")

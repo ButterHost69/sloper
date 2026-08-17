@@ -15,6 +15,7 @@ import (
 
 	"github.com/ButterHost69/sloper/internal/models"
 	"github.com/ButterHost69/sloper/internal/storage"
+	"github.com/ButterHost69/sloper/internal/version"
 )
 
 // webServer is the dashboard API server for a single sloper instance.
@@ -29,6 +30,16 @@ type webServer struct {
 }
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--version", "-v":
+			fmt.Println("sloper-web", version.Version)
+			os.Exit(0)
+		}
+	}
+
+	fmt.Printf("sloper-web %s starting\n", version.Version)
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
