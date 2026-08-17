@@ -800,6 +800,11 @@ func (s *Scheduler) runReviewStage(ctx context.Context, rec storage.IssueRecord)
 		return nil
 	}
 
+	// Right now the review of pr is moved to human review after a fixed number of 
+	// Review runs. But what would be better a model runnning it and deciding if review 
+	// Works as intended   (For that we might have to move a more TDD approach, get a test
+	// 						written first than do a solving pr - 
+	// 						for this we can even utilize sub issues)
 	iterations := rec.ReviewIterations
 	if iterations >= models.MaxReviewIterations {
 		log.Info("scheduler: max review iterations reached, requesting human review")
