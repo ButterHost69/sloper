@@ -27,7 +27,7 @@ RUN \. "$HOME/.nvm/nvm.sh"
 RUN . "$NVM_DIR/nvm.sh" && nvm install 24
 RUN . "$NVM_DIR/nvm.sh" && node -v # Should print "v24.18.0".
 RUN . "$NVM_DIR/nvm.sh" && npm -v # Should print "11.16.0".
-RUN . "$NVM_DIR/nvm.sh" && npm install -g --ignore-scripts @earendil-works/pi-coding-agent \
+RUN . "$NVM_DIR/nvm.sh" && npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.2 \
     && ln -sf "$(npm root -g)/@earendil-works/pi-coding-agent/dist/cli.js" /usr/local/bin/pi \
     && chmod +x /usr/local/bin/pi
 

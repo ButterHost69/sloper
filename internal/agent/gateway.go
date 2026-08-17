@@ -139,7 +139,12 @@ func collectUntilSettled(
 							evtJSON, _ := json.Marshal(evt)
 							log.Error("agent: assistant error — raw event",
 								zap.String("raw", string(evtJSON)))
-							if evt.Error != "" && messageEndText == "" {
+							// Prefer the provider's errorMessage (e.g. "401: CreditsError:
+							// Insufficient balance ...") so the real cause reaches logs and
+							// the GitHub failure comment.
+							if evt.Message.ErrorMessage != "" {
+								messageEndText = evt.Message.ErrorMessage
+							} else if evt.Error != "" && messageEndText == "" {
 								messageEndText = evt.Error
 							}
 						}
