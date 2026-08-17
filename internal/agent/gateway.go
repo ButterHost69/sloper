@@ -29,6 +29,11 @@ func NewAgentGateway(opts models.AgentOptions) *AgentGateway {
 type StageOutput struct {
 	Text     string
 	Thinking string
+	// FinalText is the complete text of the last assistant message (the final
+	// answer), assembled from its message_end content parts. Unlike Text, which
+	// accumulates streamed deltas from every turn (tool narration included),
+	// FinalText is a single clean message — the right input for JSON parsers.
+	FinalText string
 }
 
 func (g *AgentGateway) RunStage(ctx context.Context, prompt string) (*StageOutput, error) {
@@ -84,6 +89,9 @@ func collectUntilSettled(
 	var messageEndText string
 	var sawSettled bool
 	var eventCount int
+	// finalAssistantText holds the complete text of the most recent assistant
+	// message_end with content — the agent's final answer at settle time.
+	var finalAssistantText string
 	// lastAssistantStopReason tracks the most recent assistant stop reason so a
 	// terminal model error is surfaced as an error instead of an empty success.
 	// It is updated on every assistant message_end, so a successful retry
@@ -131,6 +139,7 @@ func collectUntilSettled(
 							log.Warn("agent: assistant message_end text",
 								zap.String("stop_reason", evt.Message.StopReason),
 								zap.String("text", truncate(msgText, 2000)))
+							finalAssistantText = msgText
 							if text.Len() == 0 {
 								messageEndText = msgText
 							}
@@ -179,7 +188,7 @@ func collectUntilSettled(
 					log.Warn("agent: settled after model error",
 						zap.Int("events_seen", eventCount),
 						zap.String("detail", truncate(detail, 2000)))
-					return &StageOutput{Text: text.String(), Thinking: thinking.String()},
+					return &StageOutput{Text: text.String(), Thinking: thinking.String(), FinalText: finalAssistantText},
 						fmt.Errorf("agent: model error: %s", detail)
 				}
 				finalText := text.String()
@@ -189,8 +198,9 @@ func collectUntilSettled(
 				log.Info("agent: settled",
 					zap.Int("events_seen", eventCount),
 					zap.Int("text_len", len(finalText)),
+					zap.Int("final_text_len", len(finalAssistantText)),
 					zap.Int("thinking_len", thinking.Len()))
-				return &StageOutput{Text: finalText, Thinking: thinking.String()}, nil
+				return &StageOutput{Text: finalText, Thinking: thinking.String(), FinalText: finalAssistantText}, nil
 			}
 
 		case <-ctx.Done():
