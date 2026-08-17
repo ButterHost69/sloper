@@ -83,6 +83,85 @@ func buildSpecPrompt(issue models.IssueDetail, feedback string) string {
 	return fmt.Sprintf(specTemplate, issue.Title, issue.Body, labels, comments, feedback)
 }
 
+const processCommentTemplate = `You are an expert software engineer triaging a GitHub issue.
+  
+Your task is to use the the past comments/conversation history and proposed spec, and try to address a following comment.
+
+## Issue
+Title: %s
+
+%s
+
+Labels: %s
+
+Entire Conversation Comments:
+%s
+
+## Unprocessed Comment to Address
+%s
+
+## Task
+1. Understand the context of the issue and the previous comments.
+2. Analyze the unprocessed comment and determine if it raises new concerns, questions, or suggestions.
+3. If the comment is valid and requires changes to the spec, propose a possible fix. Ensure you understand the codebase and the implications of the proposed changes.
+4. If the comment is valid but requires more details to be filled by the user, trigger the /grill-me skill to ask for more information. 
+5. If the comment is not relevant or does not require changes, provide a rationale for why it can be ignored.
+
+If you feel you do not enough context to provide propose a fix, explore the codebase to understand the project structure and relevant code.
+Use these tools:
+- ls: List files and directories to understand project structure
+- find: Find files by pattern (e.g. find "*.go" in src/)
+- grep: Search for relevant keywords, function names, or patterns
+- read: Read the contents of specific files you identify as relevant
+- bash: Run any shell commands needed (e.g. cat, wc, tree, etc.)
+
+
+## Output Format
+You MUST wrap your final answer in a fenced JSON block.  Do not output
+anything except the JSON block as your final message.
+
+For example, if you propose a fix, your output should look like this:
+` + "```json" + `{
+  "summary": "one-line summary of the issue and the proposed fix",
+  "files_to_change": ["path/to/file1.go", "path/to/file2.go"],
+}
+` + "```" + `
+
+If you trigger the /grill-me skill, your output should look like this:
+` + "```json" + `{
+  "grill_me": true,
+  "questions": ["question 1", "question 2"]
+}
+` + "```" + `
+
+IMPORTANT:
+- Do NOT make any edits yet.  Only produce the specification.
+- The "summary" field must be a real description, not empty.
+- The "files_to_change" array must list actual file paths from the repo.
+- The "implementation_plan" must be detailed and reference real code.`
+
+
+
+
+func buildProcessCommentPrompt(issue models.IssueDetail, unprocessedComment string) string {
+	labels := "none"
+	if len(issue.Labels) > 0 {
+		labels = strings.Join(issue.Labels, ", ")
+	}
+	comments := "none"
+	if len(issue.Comments) > 0 {
+		parts := make([]string, 0, len(issue.Comments))
+		for _, c := range issue.Comments {
+			parts = append(parts, fmt.Sprintf("[%s] %s:\n%s", c.CreatedAt, c.Author, c.Body))
+		}
+		comments = strings.Join(parts, "\n\n---\n\n")
+	}
+	if unprocessedComment == "" {
+		unprocessedComment = "(none)"
+	}
+	return fmt.Sprintf(processCommentTemplate, issue.Title, issue.Body, labels, comments, unprocessedComment)
+}
+
 // ─── WORK ───────────────────────────────────────────────────────────
 
 const workTemplate = `You are implementing a fix based on the following specification.

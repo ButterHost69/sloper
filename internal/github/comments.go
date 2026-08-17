@@ -30,7 +30,7 @@ func (g *GithubGateway) ReplyToIssueComment(ctx context.Context, repo string, is
 	hostname, repoPath := splitRepoHostname(repo)
 	args := []string{"api", "--method", "POST",
 		"-f", "body=" + body,
-		"-f", fmt.Sprintf("in_reply_to=%d", replyToID),
+		"-F", fmt.Sprintf("in_reply_to=%d", replyToID),
 		fmt.Sprintf("repos/%s/issues/%d/comments", repoPath, issueNumber)}
 	if hostname != "" {
 		args = append(args, "--hostname", hostname)
