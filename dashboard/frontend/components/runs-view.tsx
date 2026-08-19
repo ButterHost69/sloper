@@ -5,7 +5,7 @@ import Link from 'next/link';
 import clsx from 'clsx';
 import { Braces, ChevronDown, Terminal } from 'lucide-react';
 import type { RunRecord } from '@/lib/types';
-import { durationMs, formatTime, truncate } from '@/lib/format';
+import { durationMs, formatTime } from '@/lib/format';
 import { RunStageBadge, RunStatusBadge } from '@/components/badges';
 import { EmptyState } from '@/components/ui';
 
@@ -107,8 +107,4 @@ export function RunsView({ runs, defaultOpenFirst = false }: { runs: RunRecord[]
       ))}
     </div>
   );
-}
-
-export function truncateRun(run: RunRecord, n = 120) {
-  return truncate(run.agent_output || run.error_message || '', n);
 }

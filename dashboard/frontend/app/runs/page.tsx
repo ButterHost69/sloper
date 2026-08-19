@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import clsx from 'clsx';
 import { Filter } from 'lucide-react';
@@ -23,9 +23,15 @@ export default function RunsPage() {
 
 function RunsPageInner() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState(searchParams.get('status') ?? 'all');
+  const statusParam = searchParams.get('status') ?? 'all';
+  const [status, setStatus] = useState(statusParam);
   const [stage, setStage] = useState('all');
   const { data, error, refresh } = useInstanceData((base) => api.runs(base, 1000), 15000);
+
+  // Keep the status filter in sync when the URL query param changes.
+  useEffect(() => {
+    setStatus(statusParam);
+  }, [statusParam]);
 
   const filtered = useMemo(() => {
     const runs = data?.runs ?? [];

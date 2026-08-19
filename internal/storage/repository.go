@@ -411,33 +411,24 @@ func (r *Repositories) FailRun(ctx context.Context, runID int64, errMsg string) 
 
 func (r *Repositories) GetLatestRun(ctx context.Context, issueNumber int64) (*RunRecord, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, issue_number, stage, status, COALESCE(checkpoint_json, ''),
-		       COALESCE(agent_output, ''), COALESCE(agent_thinking, ''),
-		       COALESCE(shell_log, ''), started_at, COALESCE(ended_at, ''),
-		       COALESCE(error_message, '')
+		SELECT `+runColumns+`
 		FROM runs WHERE issue_number = ?
 		ORDER BY id DESC LIMIT 1
 	`, issueNumber)
 
-	var rec RunRecord
-	err := row.Scan(&rec.ID, &rec.IssueNumber, &rec.Stage, &rec.Status,
-		&rec.CheckpointJSON, &rec.AgentOutput, &rec.AgentThinking,
-		&rec.ShellLog, &rec.StartedAt, &rec.EndedAt, &rec.ErrorMessage)
+	rec, err := scanRun(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("storage: get latest run for issue %d: %w", issueNumber, err)
 	}
-	return &rec, nil
+	return rec, nil
 }
 
 func (r *Repositories) GetInterruptedRuns(ctx context.Context) ([]RunRecord, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, issue_number, stage, status, COALESCE(checkpoint_json, ''),
-		       COALESCE(agent_output, ''), COALESCE(agent_thinking, ''),
-		       COALESCE(shell_log, ''), started_at, COALESCE(ended_at, ''),
-		       COALESCE(error_message, '')
+		SELECT `+runColumns+`
 		FROM runs WHERE status = 'running'
 	`)
 	if err != nil {
@@ -447,13 +438,11 @@ func (r *Repositories) GetInterruptedRuns(ctx context.Context) ([]RunRecord, err
 
 	var out []RunRecord
 	for rows.Next() {
-		var rec RunRecord
-		if err := rows.Scan(&rec.ID, &rec.IssueNumber, &rec.Stage, &rec.Status,
-			&rec.CheckpointJSON, &rec.AgentOutput, &rec.AgentThinking,
-			&rec.ShellLog, &rec.StartedAt, &rec.EndedAt, &rec.ErrorMessage); err != nil {
+		rec, err := scanRun(rows)
+		if err != nil {
 			return nil, fmt.Errorf("storage: scan run: %w", err)
 		}
-		out = append(out, rec)
+		out = append(out, *rec)
 	}
 	return out, rows.Err()
 }

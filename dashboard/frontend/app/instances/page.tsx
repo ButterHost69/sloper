@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, ExternalLink, Pencil, Plus, Server, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, ExternalLink, KeyRound, Pencil, Plus, Server, Trash2, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { useInstances } from '@/components/instance-context';
 import { api } from '@/lib/api';
+import { normalizeUrl } from '@/lib/instances';
 import { timeAgo, formatBytes } from '@/lib/format';
 import type { Health, RepoInfo } from '@/lib/types';
 import { Panel, PulseDot, SectionHeader } from '@/components/ui';
@@ -171,30 +172,49 @@ export default function InstancesPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  const [token, setToken] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const reset = () => {
     setShowForm(false);
     setEditing(null);
     setName('');
     setUrl('');
+    setToken('');
+    setFormError(null);
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !url.trim()) return;
+    if (!name.trim() || !url.trim()) {
+      setFormError('Name and URL are required.');
+      return;
+    }
+    let normalized: string;
+    try {
+      normalized = normalizeUrl(url.trim());
+      const parsed = new URL(normalized);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error();
+    } catch {
+      setFormError('URL must be a valid http:// or https:// address.');
+      return;
+    }
+    const cleanToken = token.trim() || undefined;
     if (editing) {
-      updateInstance(editing, { name: name.trim(), url: url.trim() });
+      updateInstance(editing, { name: name.trim(), url: normalized, token: cleanToken });
     } else {
-      addInstance(name.trim(), url.trim());
+      addInstance(name.trim(), normalized, cleanToken);
     }
     reset();
   };
 
-  const startEdit = (id: string, n: string, u: string) => {
+  const startEdit = (id: string, n: string, u: string, t?: string) => {
     setEditing(id);
     setName(n);
     setUrl(u);
+    setToken(t ?? '');
     setShowForm(true);
+    setFormError(null);
   };
 
   return (
@@ -213,27 +233,49 @@ export default function InstancesPage() {
 
       {showForm && (
         <Panel>
-          <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr_auto]">
-            <div>
-              <label className="label">Name</label>
-              <input
-                className="input"
-                placeholder="e.g. Staging"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-              />
+          <form onSubmit={submit} className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
+              <div>
+                <label className="label">Name</label>
+                <input
+                  className="input"
+                  placeholder="e.g. Staging"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="label">Base URL</label>
+                <input
+                  className="input mono"
+                  placeholder="http://localhost:8080"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
+              </div>
             </div>
-            <div>
-              <label className="label">Base URL</label>
-              <input
-                className="input mono"
-                placeholder="http://localhost:8080"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="label flex items-center gap-1.5">
+                  <KeyRound size={12} className="text-ink-faint" /> Bearer token (optional)
+                </label>
+                <input
+                  type="password"
+                  className="input mono"
+                  placeholder="SLOPER_WEB_TOKEN if the server requires one"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
             </div>
-            <div className="flex items-end gap-2">
+            {formError && (
+              <p className="flex items-center gap-1.5 text-xs text-danger">
+                <XCircle size={13} /> {formError}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
               <button type="submit" className="btn btn-primary">
                 {editing ? 'Save' : 'Add'}
               </button>
@@ -254,7 +296,7 @@ export default function InstancesPage() {
             url={inst.url}
             isActive={inst.id === active?.id}
             onActivate={() => setActive(inst.id)}
-            onEdit={() => startEdit(inst.id, inst.name, inst.url)}
+            onEdit={() => startEdit(inst.id, inst.name, inst.url, inst.token)}
             onRemove={() => removeInstance(inst.id)}
           />
         ))}
@@ -281,8 +323,9 @@ SLOPER_DB_PATH=/path/to/sloper.sqlite \\
 SLOPER_WEB_PORT=8080 \\
   ./dist/sloper-web
 
-# defaults: ~/.sloper/sloper.sqlite on :8080 (0.0.0.0)
-# env: SLOPER_WEB_PORT, SLOPER_WEB_ADDR, SLOPER_DB_PATH, SLOPER_REPO`}
+# defaults: ~/.sloper/sloper.sqlite on 127.0.0.1:8080
+# env: SLOPER_WEB_PORT, SLOPER_WEB_ADDR, SLOPER_DB_PATH, SLOPER_REPO
+# optional auth: SLOPER_WEB_TOKEN=secret — add the same token to the form above`}
           </pre>
           <div className="mt-4 flex items-start gap-2 rounded-lg border border-edge bg-panel-2 p-3 text-xs text-ink-dim">
             <ExternalLink size={14} className="mt-0.5 shrink-0 text-accent" />

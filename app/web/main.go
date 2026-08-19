@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -27,6 +28,7 @@ type webServer struct {
 	repo   string
 	gitURL string
 	env    map[string]string
+	token  string
 }
 
 func main() {
@@ -44,7 +46,7 @@ func main() {
 	defer cancel()
 
 	port := envOr("SLOPER_WEB_PORT", "8080")
-	addr := envOr("SLOPER_WEB_ADDR", "0.0.0.0") + ":" + port
+	addr := envOr("SLOPER_WEB_ADDR", "127.0.0.1") + ":" + port
 
 	dbPath := os.Getenv("SLOPER_DB_PATH")
 	db, err := storage.OpenDB(dbPath)
@@ -64,6 +66,7 @@ func main() {
 		start: time.Now(),
 		repo:  envOr("SLOPER_REPO", detectRepoFromGit()),
 		env:   safeEnv(),
+		token: os.Getenv("SLOPER_WEB_TOKEN"),
 	}
 	s.gitURL = detectRepoURL()
 
@@ -71,10 +74,13 @@ func main() {
 	s.routes(mux)
 
 	fmt.Printf("sloper dashboard API listening on http://%s (repo: %s)\n", addr, s.repo)
+	if s.token != "" {
+		fmt.Println("web: bearer token auth enabled (SLOPER_WEB_TOKEN)")
+	}
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           cors(mux),
+		Handler:           cors(s.auth(mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -151,7 +157,7 @@ func (s *webServer) handleSummary(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	pulls, err := s.db.ListPRs(ctx, 5000)
+	prStates, err := s.db.CountPRsByState(ctx)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -165,11 +171,9 @@ func (s *webServer) handleSummary(w http.ResponseWriter, r *http.Request) {
 	for _, c := range runStatuses {
 		totalRuns += c
 	}
-	openPulls := 0
-	for _, p := range pulls {
-		if p.State == "open" {
-			openPulls++
-		}
+	totalPulls := 0
+	for _, c := range prStates {
+		totalPulls += c
 	}
 
 	eventTotal, err := s.db.CountEvents(ctx)
@@ -199,8 +203,8 @@ func (s *webServer) handleSummary(w http.ResponseWriter, r *http.Request) {
 			"interrupted": runStatuses["interrupted"],
 		},
 		"pulls": map[string]any{
-			"total": len(pulls),
-			"open":  openPulls,
+			"total": totalPulls,
+			"open":  prStates["open"],
 		},
 		"events": map[string]any{
 			"total":   eventTotal,
@@ -211,7 +215,9 @@ func (s *webServer) handleSummary(w http.ResponseWriter, r *http.Request) {
 
 func (s *webServer) handleIssues(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	issues, err := s.db.ListIssues(r.Context(), limit, offset)
+	stage := r.URL.Query().Get("stage")
+	q := r.URL.Query().Get("q")
+	issues, err := s.db.ListIssuesFiltered(r.Context(), limit, offset, stage, q)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -438,6 +444,24 @@ func cors(next http.Handler) http.Handler {
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// auth guards every API route with a shared bearer token when SLOPER_WEB_TOKEN
+// is set. Requests without it get a 401. It runs inside the CORS wrapper so
+// preflight OPTIONS requests are never blocked.
+func (s *webServer) auth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.token != "" {
+			want := "Bearer " + s.token
+			got := r.Header.Get("Authorization")
+			if subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				writeError(w, http.StatusUnauthorized, fmt.Errorf("missing or invalid bearer token"))
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

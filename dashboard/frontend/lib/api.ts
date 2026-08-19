@@ -10,7 +10,7 @@ import type {
   RunRecord,
   Summary,
 } from './types';
-import { normalizeUrl } from './instances';
+import { normalizeUrl, tokenFor } from './instances';
 
 export class ApiError extends Error {
   status: number;
@@ -22,12 +22,16 @@ export class ApiError extends Error {
 
 async function request<T>(base: string, path: string, timeoutMs = 8000): Promise<T> {
   const url = `${normalizeUrl(base)}${path}`;
+  const token = tokenFor(base);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     });
     if (!res.ok) {
       let msg = `HTTP ${res.status}`;
@@ -51,12 +55,24 @@ async function request<T>(base: string, path: string, timeoutMs = 8000): Promise
   }
 }
 
+export interface IssuesParams {
+  limit?: number;
+  stage?: string;
+  q?: string;
+}
+
 export const api = {
   health: (base: string) => request<Health>(base, '/api/health', 5000),
   repo: (base: string) => request<RepoInfo>(base, '/api/repo'),
   summary: (base: string) => request<Summary>(base, '/api/summary'),
-  issues: (base: string, limit = 500) =>
-    request<{ issues: Issue[]; count: number }>(base, `/api/issues?limit=${limit}`),
+  issues: (base: string, params: IssuesParams = {}) => {
+    const sp = new URLSearchParams();
+    if (params.limit) sp.set('limit', String(params.limit));
+    if (params.stage && params.stage !== 'all') sp.set('stage', params.stage);
+    if (params.q) sp.set('q', params.q);
+    const qs = sp.toString();
+    return request<{ issues: Issue[]; count: number }>(base, `/api/issues${qs ? `?${qs}` : ''}`);
+  },
   issueDetail: (base: string, number: number) =>
     request<IssueDetail>(base, `/api/issues/${number}`),
   comments: (base: string, number: number) =>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { InstanceProvider } from '@/components/instance-context';
+import { HealthProvider } from '@/components/health-context';
 import { AppShell } from '@/components/app-shell';
 
 export const metadata: Metadata = {
@@ -18,7 +19,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className="bg-base text-ink antialiased">
         <InstanceProvider>
-          <AppShell>{children}</AppShell>
+          <HealthProvider>
+            <AppShell>{children}</AppShell>
+          </HealthProvider>
         </InstanceProvider>
       </body>
     </html>

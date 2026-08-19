@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -14,6 +13,11 @@ const issueColumns = `number, title, state, url, author, updated_at, labels,
 	is_pull_request, stage, COALESCE(spec_json, ''), COALESCE(branch_name, ''),
 	COALESCE(pr_number, 0), last_comment_id, review_iterations,
 	created_at, first_seen_at, updated_at_local`
+
+const runColumns = `id, issue_number, stage, status, COALESCE(checkpoint_json, ''),
+	COALESCE(agent_output, ''), COALESCE(agent_thinking, ''),
+	COALESCE(shell_log, ''), started_at, COALESCE(ended_at, ''),
+	COALESCE(error_message, '')`
 
 func scanIssue(sc interface{ Scan(...any) error }) (*IssueRecord, error) {
 	var rec IssueRecord
@@ -36,6 +40,16 @@ func scanIssue(sc interface{ Scan(...any) error }) (*IssueRecord, error) {
 	return &rec, nil
 }
 
+func scanRun(sc interface{ Scan(...any) error }) (*RunRecord, error) {
+	var rec RunRecord
+	if err := sc.Scan(&rec.ID, &rec.IssueNumber, &rec.Stage, &rec.Status,
+		&rec.CheckpointJSON, &rec.AgentOutput, &rec.AgentThinking,
+		&rec.ShellLog, &rec.StartedAt, &rec.EndedAt, &rec.ErrorMessage); err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
 // ListIssues returns every cached issue, newest activity first.
 func (r *Repositories) ListIssues(ctx context.Context, limit, offset int) ([]IssueRecord, error) {
 	if limit <= 0 {
@@ -48,6 +62,51 @@ func (r *Repositories) ListIssues(ctx context.Context, limit, offset int) ([]Iss
 		LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list issues: %w", err)
+	}
+	defer rows.Close()
+
+	var out []IssueRecord
+	for rows.Next() {
+		rec, err := scanIssue(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan issue: %w", err)
+		}
+		out = append(out, *rec)
+	}
+	return out, rows.Err()
+}
+
+// ListIssuesFiltered returns issues optionally narrowed by stage and a free-text
+// query. An empty stage ("all") and an empty query behave like ListIssues.
+func (r *Repositories) ListIssuesFiltered(ctx context.Context, limit, offset int, stage, q string) ([]IssueRecord, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	where := ""
+	args := []any{}
+	if stage != "" && stage != "all" {
+		where = " WHERE stage = ?"
+		args = append(args, stage)
+	}
+	if q != "" {
+		like := "%" + q + "%"
+		if where == "" {
+			where = " WHERE "
+		} else {
+			where += " AND "
+		}
+		where += "(title LIKE ? OR author LIKE ? OR CAST(number AS TEXT) LIKE ? OR labels LIKE ?)"
+		args = append(args, like, like, like, like)
+	}
+	args = append(args, limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+issueColumns+`
+		FROM issues`+where+`
+		ORDER BY updated_at_local DESC, number DESC
+		LIMIT ? OFFSET ?`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list filtered issues: %w", err)
 	}
 	defer rows.Close()
 
@@ -157,15 +216,33 @@ func (r *Repositories) ListPRs(ctx context.Context, limit int) ([]PRRecord, erro
 	return out, rows.Err()
 }
 
+// CountPRsByState returns state -> count for all cached pull requests.
+func (r *Repositories) CountPRsByState(ctx context.Context) (map[string]int, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT state, COUNT(*) FROM pull_requests GROUP BY state`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: count prs by state: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]int)
+	for rows.Next() {
+		var state string
+		var count int
+		if err := rows.Scan(&state, &count); err != nil {
+			return nil, fmt.Errorf("storage: scan pr state count: %w", err)
+		}
+		out[state] = count
+	}
+	return out, rows.Err()
+}
+
 func (r *Repositories) ListRuns(ctx context.Context, limit, offset int) ([]RunRecord, error) {
 	if limit <= 0 {
 		limit = 500
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, issue_number, stage, status, COALESCE(checkpoint_json, ''),
-		       COALESCE(agent_output, ''), COALESCE(agent_thinking, ''),
-		       COALESCE(shell_log, ''), started_at, COALESCE(ended_at, ''),
-		       COALESCE(error_message, '')
+		SELECT `+runColumns+`
 		FROM runs
 		ORDER BY id DESC
 		LIMIT ? OFFSET ?`, limit, offset)
@@ -176,23 +253,18 @@ func (r *Repositories) ListRuns(ctx context.Context, limit, offset int) ([]RunRe
 
 	var out []RunRecord
 	for rows.Next() {
-		var rec RunRecord
-		if err := rows.Scan(&rec.ID, &rec.IssueNumber, &rec.Stage, &rec.Status,
-			&rec.CheckpointJSON, &rec.AgentOutput, &rec.AgentThinking,
-			&rec.ShellLog, &rec.StartedAt, &rec.EndedAt, &rec.ErrorMessage); err != nil {
+		rec, err := scanRun(rows)
+		if err != nil {
 			return nil, fmt.Errorf("storage: scan run: %w", err)
 		}
-		out = append(out, rec)
+		out = append(out, *rec)
 	}
 	return out, rows.Err()
 }
 
 func (r *Repositories) ListRunsByIssue(ctx context.Context, issueNumber int64) ([]RunRecord, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, issue_number, stage, status, COALESCE(checkpoint_json, ''),
-		       COALESCE(agent_output, ''), COALESCE(agent_thinking, ''),
-		       COALESCE(shell_log, ''), started_at, COALESCE(ended_at, ''),
-		       COALESCE(error_message, '')
+		SELECT `+runColumns+`
 		FROM runs WHERE issue_number = ?
 		ORDER BY id ASC`, issueNumber)
 	if err != nil {
@@ -202,13 +274,11 @@ func (r *Repositories) ListRunsByIssue(ctx context.Context, issueNumber int64) (
 
 	var out []RunRecord
 	for rows.Next() {
-		var rec RunRecord
-		if err := rows.Scan(&rec.ID, &rec.IssueNumber, &rec.Stage, &rec.Status,
-			&rec.CheckpointJSON, &rec.AgentOutput, &rec.AgentThinking,
-			&rec.ShellLog, &rec.StartedAt, &rec.EndedAt, &rec.ErrorMessage); err != nil {
+		rec, err := scanRun(rows)
+		if err != nil {
 			return nil, fmt.Errorf("storage: scan run: %w", err)
 		}
-		out = append(out, rec)
+		out = append(out, *rec)
 	}
 	return out, rows.Err()
 }
@@ -385,35 +455,8 @@ func (r *Repositories) DBSize(ctx context.Context) (int64, error) {
 	return size * pageSize, nil
 }
 
-// SQLStats mirrors the output of SQLite's `PRAGMA database_stat`.
-func (r *Repositories) SQLStats(ctx context.Context) (map[string]any, error) {
-	rows, err := r.db.QueryContext(ctx, `PRAGMA database_stat`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string]any{}
-	cols, _ := rows.Columns()
-	vals := make([]any, len(cols))
-	ptrs := make([]any, len(cols))
-	for i := range vals {
-		ptrs[i] = &vals[i]
-	}
-	for rows.Next() {
-		if err := rows.Scan(ptrs...); err != nil {
-			return nil, err
-		}
-		for i, c := range cols {
-			out[c] = vals[i]
-		}
-	}
-	return out, nil
-}
-
 // ActivityBucket is a single point on the activity timeline.
 type ActivityBucket struct {
 	Time  string `json:"time"`
 	Count int    `json:"count"`
 }
-
-var _ = sql.ErrNoRows

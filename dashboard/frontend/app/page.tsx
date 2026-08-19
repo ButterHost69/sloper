@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   CheckCircle2,
   CircleDot,
@@ -15,6 +16,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useInstances } from '@/components/instance-context';
+import { useHealth } from '@/components/health-context';
 import { useInstanceData } from '@/hooks/use-instance-data';
 import { api } from '@/lib/api';
 import { timeAgo, formatBytes } from '@/lib/format';
@@ -26,6 +28,8 @@ import { RunsView } from '@/components/runs-view';
 
 export default function OverviewPage() {
   const { active } = useInstances();
+  const { health } = useHealth();
+  const router = useRouter();
   const [hours, setHours] = useState(24);
 
   const { data: summary, loading: summaryLoading, error, refresh, refreshing } = useInstanceData(
@@ -35,7 +39,6 @@ export default function OverviewPage() {
   const { data: events } = useInstanceData((base) => api.events(base, 40), 10000);
   const { data: runs } = useInstanceData((base) => api.runs(base, 8), 15000);
   const { data: activity } = useInstanceData((base) => api.activity(base, hours), 30000, !!active);
-  const { data: health } = useInstanceData((base) => api.health(base), 15000);
   const { data: repo } = useInstanceData((base) => api.repo(base), 60000);
 
   const eventTypes = useMemo(() => {
@@ -142,7 +145,7 @@ export default function OverviewPage() {
               icon={<TriangleAlert size={16} />}
               accent="#f87171"
               loading={summaryLoading}
-              onClick={() => (window.location.href = '/issues?stage=failed')}
+              onClick={() => router.push('/issues?stage=failed')}
             />
             <StatCard
               label="Active runs"
@@ -308,7 +311,7 @@ export default function OverviewPage() {
               icon={<TriangleAlert size={16} />}
               accent="#f87171"
               loading={summaryLoading}
-              onClick={() => (window.location.href = '/runs?status=failed')}
+              onClick={() => router.push('/runs?status=failed')}
             />
           </div>
         </>

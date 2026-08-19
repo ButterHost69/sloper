@@ -46,6 +46,10 @@ make build-web          # -> dist/sloper-web
 # 2. Run it next to each sloper instance (defaults: ~/.sloper/sloper.sqlite, :8080)
 SLOPER_DB_PATH=/path/to/sloper.sqlite SLOPER_WEB_PORT=8080 ./dist/sloper-web
 
+# Optional hardening: bind to localhost only by default; set a bearer token to
+# require auth on every request (add the same token to the instance in the UI).
+SLOPER_WEB_TOKEN=change-me SLOPER_WEB_ADDR=127.0.0.1 ./dist/sloper-web
+
 # 3. Build + run the console
 make build-dashboard    # npm install + next build
 make run-dashboard      # next start on :3000
@@ -61,13 +65,16 @@ console will start polling them.
 
 ## API
 
-The Go server (`app/web/main.go`) exposes read-only JSON over the sloper SQLite DB:
+The Go server (`app/web/main.go`) exposes read-only JSON over the sloper SQLite DB.
+By default it binds to `127.0.0.1:8080`. Set `SLOPER_WEB_TOKEN` to require a
+`Authorization: Bearer <token>` header — the console stores per-instance tokens and
+sends them automatically.
 
 ```
 GET /api/health                instance health + repo name
 GET /api/repo                  repo meta, db size, sanitized agent config
 GET /api/summary               aggregate counts (issues/runs/pulls/events)
-GET /api/issues                cached issues (limit/offset)
+GET /api/issues                cached issues (?limit, ?stage, ?q search)
 GET /api/issues/{n}            detail + spec + comments + runs + events + PR
 GET /api/issues/{n}/comments   comments
 GET /api/issues/{n}/runs       pipeline runs
@@ -79,3 +86,5 @@ GET /api/metrics/activity      activity buckets for charts (?hours=24)
 ```
 
 CORS is wide open (`*`) so the browser-based console can reach instances anywhere.
+Pair that with `SLOPER_WEB_TOKEN` (or a reverse proxy with auth) whenever the server
+is exposed beyond localhost.

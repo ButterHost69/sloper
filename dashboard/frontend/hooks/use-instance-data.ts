@@ -17,12 +17,15 @@ export interface DataState<T> {
  * Falls back to the previous data during re-fetch to avoid UI flicker.
  *
  * The fetcher is kept in a ref so its (typically inline) identity does not
- * retrigger the polling effects — only a change of instance URL does.
+ * retrigger the polling effects — only a change of instance URL does. Pass
+ * extra values in `deps` (e.g. search/filter state) to force a reload when
+ * they change.
  */
 export function useInstanceData<T>(
   fetcher: (base: string) => Promise<T>,
   intervalMs = 10000,
   enabled = true,
+  deps: unknown[] = [],
 ): DataState<T> {
   const { active } = useInstances();
   const [data, setData] = useState<T | null>(null);
@@ -65,7 +68,8 @@ export function useInstanceData<T>(
         setRefreshing(false);
       }
     },
-    [url],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [url, ...deps],
   );
 
   useEffect(() => {

@@ -13,6 +13,7 @@ import type { Summary } from '@/lib/types';
 export function PipelineFunnel({ summary }: { summary: Summary }) {
   const byStage = summary?.issues?.by_stage ?? {};
   const total = Math.max(1, summary?.issues?.total ?? 1);
+  const failedCount = byStage['failed'] ?? 0;
   const router = useRouter();
 
   return (
@@ -54,6 +55,28 @@ export function PipelineFunnel({ summary }: { summary: Summary }) {
           </div>
         );
       })}
+      {failedCount > 0 && (
+        <button
+          onClick={() => router.push('/issues?stage=failed')}
+          className="ml-2 shrink-0 self-stretch rounded-lg border border-danger/40 bg-danger/10 p-2.5 text-left transition hover:border-danger/60 hover:bg-danger/15"
+          title="Issues stuck in a failed state"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ background: '#f87171', boxShadow: '0 0 6px #f87171' }}
+            />
+            <span className="text-lg font-semibold tabular-nums text-danger">{failedCount}</span>
+          </div>
+          <p className="mt-1.5 text-[0.68rem] font-medium text-danger">Failed</p>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-danger/20">
+            <div
+              className="h-full rounded-full bg-danger transition-all duration-500"
+              style={{ width: `${Math.round((failedCount / total) * 100)}%`, opacity: 0.8 }}
+            />
+          </div>
+        </button>
+      )}
     </div>
   );
 }

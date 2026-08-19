@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowUpRight, GitPullRequest, Search } from 'lucide-react';
@@ -73,35 +73,36 @@ export default function IssuesPage() {
 
 function IssuesPageInner() {
   const searchParams = useSearchParams();
-  const initialStage = searchParams.get('stage') ?? 'all';
+  const stageParam = searchParams.get('stage') ?? 'all';
   const [query, setQuery] = useState('');
-  const [stage, setStage] = useState(initialStage);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [stage, setStage] = useState(stageParam);
+
+  // Keep the filter in sync when the URL query param changes (e.g. funnel nav).
+  useEffect(() => {
+    setStage(stageParam);
+  }, [stageParam]);
+
+  // Debounce the search box so we only hit the server after a pause.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
 
   const { data, error, refresh } = useInstanceData(
-    (base) => api.issues(base, 1000),
+    (base) => api.issues(base, { limit: 500, stage, q: debouncedQuery }),
     15000,
+    true,
+    [stage, debouncedQuery],
   );
 
-  const filtered = useMemo(() => {
-    const issues = data?.issues ?? [];
-    const q = query.trim().toLowerCase();
-    return issues.filter((i) => {
-      if (stage !== 'all' && i.stage !== stage) return false;
-      if (!q) return true;
-      return (
-        i.title.toLowerCase().includes(q) ||
-        String(i.number).includes(q) ||
-        i.author.toLowerCase().includes(q) ||
-        i.labels.some((l) => l.toLowerCase().includes(q))
-      );
-    });
-  }, [data, query, stage]);
+  // Stage counts come from the summary endpoint so chips stay accurate
+  // regardless of the active search/filter.
+  const { data: summary } = useInstanceData((base) => api.summary(base), 15000);
+  const totalIssues = summary?.issues?.total ?? 0;
+  const counts = useMemo(() => summary?.issues?.by_stage ?? {}, [summary]);
 
-  const counts = useMemo(() => {
-    const byStage: Record<string, number> = {};
-    for (const i of data?.issues ?? []) byStage[i.stage] = (byStage[i.stage] ?? 0) + 1;
-    return byStage;
-  }, [data]);
+  const shown = data?.issues.length ?? 0;
 
   return (
     <div className="space-y-5">
@@ -109,7 +110,7 @@ function IssuesPageInner() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-ink">Issues</h1>
           <p className="mt-1 text-xs text-ink-faint">
-            {data?.count ?? 0} cached issues · {filtered.length} shown
+            {totalIssues} total · {shown} shown
           </p>
         </div>
         <div className="relative w-full max-w-xs">
@@ -133,7 +134,7 @@ function IssuesPageInner() {
           )}
         >
           All
-          <span className="text-ink-faint">{data?.count ?? 0}</span>
+          <span className="text-ink-faint">{totalIssues}</span>
         </button>
         {STAGES.map((s) => (
           <button
@@ -162,7 +163,7 @@ function IssuesPageInner() {
         </Panel>
       ) : (
         <Panel className="overflow-hidden p-0">
-          {filtered.length === 0 ? (
+          {data.issues.length === 0 ? (
             <EmptyState title="No matching issues" hint="Adjust the search or filter." />
           ) : (
             <div>
@@ -172,7 +173,7 @@ function IssuesPageInner() {
                 <span className="col-span-2">Labels</span>
                 <span className="col-span-2 text-right">Created</span>
               </div>
-              {filtered.map((i) => (
+              {data.issues.map((i) => (
                 <IssueRow key={i.number} issue={i} />
               ))}
             </div>

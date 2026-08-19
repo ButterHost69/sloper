@@ -11,6 +11,7 @@ import {
 } from 'react';
 import type { Instance } from '@/lib/types';
 import {
+  ACTIVE_KEY,
   loadActiveInstanceId,
   loadInstances,
   makeId,
@@ -23,8 +24,8 @@ interface InstanceContextValue {
   instances: Instance[];
   active: Instance | null;
   setActive: (id: string) => void;
-  addInstance: (name: string, url: string) => Instance;
-  updateInstance: (id: string, patch: Partial<Pick<Instance, 'name' | 'url'>>) => void;
+  addInstance: (name: string, url: string, token?: string) => Instance;
+  updateInstance: (id: string, patch: Partial<Pick<Instance, 'name' | 'url' | 'token'>>) => void;
   removeInstance: (id: string) => void;
 }
 
@@ -56,8 +57,8 @@ export function InstanceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addInstance = useCallback(
-    (name: string, url: string) => {
-      const inst: Instance = { id: makeId(), name, url: normalizeUrl(url) };
+    (name: string, url: string, token?: string) => {
+      const inst: Instance = { id: makeId(), name, url: normalizeUrl(url), token: token || undefined };
       persist([...instances, inst]);
       setActiveId(inst.id);
       saveActiveInstanceId(inst.id);
@@ -67,11 +68,16 @@ export function InstanceProvider({ children }: { children: ReactNode }) {
   );
 
   const updateInstance = useCallback(
-    (id: string, patch: Partial<Pick<Instance, 'name' | 'url'>>) => {
+    (id: string, patch: Partial<Pick<Instance, 'name' | 'url' | 'token'>>) => {
       persist(
         instances.map((i) =>
           i.id === id
-            ? { ...i, ...patch, url: patch.url ? normalizeUrl(patch.url) : i.url }
+            ? {
+                ...i,
+                ...patch,
+                url: patch.url ? normalizeUrl(patch.url) : i.url,
+                token: patch.token === undefined ? i.token : patch.token || undefined,
+              }
             : i,
         ),
       );
@@ -87,7 +93,7 @@ export function InstanceProvider({ children }: { children: ReactNode }) {
         const fallback = next[0]?.id ?? null;
         setActiveId(fallback);
         if (fallback) saveActiveInstanceId(fallback);
-        else localStorage.removeItem('sloper.activeInstance.v1');
+        else localStorage.removeItem(ACTIVE_KEY);
       }
     },
     [instances, persist, activeId],
@@ -110,14 +116,4 @@ export function useInstances(): InstanceContextValue {
   const ctx = useContext(InstanceContext);
   if (!ctx) throw new Error('useInstances must be used within InstanceProvider');
   return ctx;
-}
-
-// True once the provider has hydrated from localStorage (avoids flash of empty state).
-export function useInstancesReady(): boolean {
-  const ctx = useContext(InstanceContext);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    if (ctx) setReady(true);
-  }, [ctx]);
-  return ready;
 }

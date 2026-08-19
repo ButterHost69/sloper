@@ -16,9 +16,9 @@ import {
   Settings,
 } from 'lucide-react';
 import { useInstances } from '@/components/instance-context';
+import { useHealth } from '@/components/health-context';
 import { PulseDot } from '@/components/ui';
-import { useInstanceData } from '@/hooks/use-instance-data';
-import { api } from '@/lib/api';
+import { safeHost } from '@/lib/instances';
 
 const NAV = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { instances, active, setActive } = useInstances();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const { data: health } = useInstanceData((base) => api.health(base), 15000);
+  const { health } = useHealth();
 
   const connected = !!health && health.status === 'ok';
 
@@ -72,7 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {active?.name ?? 'No instance'}
               </span>
               <span className="block truncate text-[0.65rem] text-ink-faint">
-                {active ? new URL(active.url).host : 'Add an instance'}
+                {active ? safeHost(active.url) || 'unknown host' : 'Add an instance'}
               </span>
             </span>
             <ChevronsUpDown size={14} className="text-ink-faint" />

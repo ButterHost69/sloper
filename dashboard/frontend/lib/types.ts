@@ -2,6 +2,7 @@ export interface Instance {
   id: string;
   name: string;
   url: string;
+  token?: string;
 }
 
 export interface Health {

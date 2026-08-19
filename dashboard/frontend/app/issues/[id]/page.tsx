@@ -57,11 +57,15 @@ function SpecPanel({ spec }: { spec: Spec | null }) {
         <h4 className="mb-1.5 text-[0.7rem] font-semibold uppercase tracking-wider text-ink-faint">
           Implementation plan
         </h4>
-        <div className="prose-dark max-h-72 overflow-auto rounded-lg border border-edge bg-[#0c0c0f] p-3">
-          {spec.implementation_plan
-            .split('\n')
-            .map((line, i) => <p key={i} className="mb-1.5">{line || '\u00A0'}</p>)}
-        </div>
+        {spec.implementation_plan ? (
+          <div className="prose-dark max-h-72 overflow-auto rounded-lg border border-edge bg-[#0c0c0f] p-3">
+            {spec.implementation_plan
+              .split('\n')
+              .map((line, i) => <p key={i} className="mb-1.5">{line || '\u00A0'}</p>)}
+          </div>
+        ) : (
+          <p className="text-xs text-ink-faint">Not determined yet.</p>
+        )}
       </div>
     </div>
   );
@@ -220,11 +224,13 @@ export default function IssueDetailPage() {
               </a>
             </span>
             <ReviewStateBadge state={data!.pr.review_state} />
-            <code className="font-mono text-xs text-ink-faint">
-              {data!.pr.head_sha.slice(0, 8)}
-              <span className="text-ink-faint/50"> → </span>
-              {data!.pr.base_sha.slice(0, 8)}
-            </code>
+            {data!.pr.head_sha ? (
+              <code className="font-mono text-xs text-ink-faint">
+                {data!.pr.head_sha.slice(0, 8)}
+                <span className="text-ink-faint/50"> → </span>
+                {data!.pr.base_sha.slice(0, 8)}
+              </code>
+            ) : null}
             <span className="ml-auto flex items-center gap-1.5 text-xs text-ink-faint">
               <MessageSquare size={12} /> created {timeAgo(data!.pr.updated_at)}
             </span>
