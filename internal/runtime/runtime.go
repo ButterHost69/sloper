@@ -43,8 +43,8 @@ func (r *Runtime) Start(ctx context.Context) {
 	defer db.Close()
 
 	log.Info("runtime: connected to the database successfuly", zap.String("repo", r.config.RepoPath))
-	if err := storage.Migrate(ctx, db); err != nil {
-		log.Error("runtime: database migration failed", zap.Error(err))
+	if err := storage.EnsureSchema(ctx, db); err != nil {
+		log.Error("runtime: database schema setup failed", zap.Error(err))
 		return
 	}
 

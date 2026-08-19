@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS issue_comments (
     body            TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL DEFAULT '',
     processed       INTEGER NOT NULL DEFAULT 0,      -- 1 = sloper has acted on this comment
+    in_reply_to_id  INTEGER NOT NULL DEFAULT 0,      -- parent comment ID for Reply-button replies
+    replied_by_bot  INTEGER NOT NULL DEFAULT 0,      -- 1 = bot has replied to this comment
     FOREIGN KEY (issue_number) REFERENCES issues(number)
 );
 
