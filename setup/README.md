@@ -12,7 +12,14 @@ make docker              # builds sloper + sloper-web image and starts it
 ```
 
 To change the host port, set `SLOPER_WEB_PORT` in `.env` (e.g. `8081` for a
-second instance) — it is forwarded by `compose.yml`.
+second instance) — it is forwarded by `compose.yml`. The web server binds
+`0.0.0.0` inside the container (set via `SLOPER_WEB_ADDR`) so the published port
+is reachable from the host; you can override it with `SLOPER_WEB_ADDR` in `.env`.
+To require a bearer token, set `SLOPER_WEB_TOKEN` in `.env` and add the same
+token to the instance in the console UI.
+
+> After changing the Go source (e.g. `app/web/main.go`), rebuild the image with
+> `make docker` — the binaries are baked into the image via the `Dockerfile`.
 
 ## Browser tools for pi workers
 

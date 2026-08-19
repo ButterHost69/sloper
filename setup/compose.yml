@@ -8,6 +8,7 @@ services:
       - "${SLOPER_WEB_PORT:-8080}:8080"
     environment:
       - SLOPER_WEB_PORT=8080
+      - SLOPER_WEB_ADDR=0.0.0.0
     volumes:
       - sloper_data:/root/.sloper
       - sloper_repo:/root/repo
