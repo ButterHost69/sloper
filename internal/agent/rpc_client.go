@@ -73,7 +73,7 @@ func newRPCClient(ctx context.Context, opts models.AgentOptions) (*rpcClient, er
 		args = append(args, "--provider", opts.Provider)
 	}
 	// Enable all tools including grep/find/ls (off by default in pi).
-	args = append(args, "--tools", "read,bash,edit,write,grep,find,ls")
+	args = append(args, "--tools", "read,bash,edit,write,grep,find,ls,mcp")
 	// Trust the project directory so pi doesn't block on interactive prompts.
 	args = append(args, "--approve")
 	if opts.SessionDir != "" {

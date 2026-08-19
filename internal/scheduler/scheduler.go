@@ -430,7 +430,7 @@ func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, 
 		return err
 	}
 
-	if spec.Summary == "" || len(spec.FilesToChange) == 0 || spec.ImplementationPlan == "" {
+	if !specIsComplete(spec) {
 		log.Warn("scheduler: spec has empty fields — agent output may not have been parsed correctly",
 			zap.String("summary", spec.Summary),
 			zap.Int("files_count", len(spec.FilesToChange)),
@@ -471,15 +471,6 @@ func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, 
 	s.transitionIssueStage(ctx, issue.Number, models.StageSpecDone)
 	_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID(issue.Comments))
 
-	specComment := formatSpecComment(spec, issue.Number)
-	if err := s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number, specComment); err != nil {
-		log.Warn("scheduler: failed to post spec comment", zap.Error(err))
-	}
-
-	if err := s.ghClient.AddIssueLabel(ctx, s.RepoName, issue.Number, models.TRIAGED_LABEL); err != nil {
-		log.Warn("scheduler: failed to add triaged label", zap.Error(err))
-	}
-
 	s.db.CompleteRun(ctx, runID, spec.RawOutput, "", "")
 	s.db.AppendEvent(ctx, storage.EventRecord{
 		IssueNumber: issue.Number,
@@ -487,6 +478,15 @@ func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, 
 		Stage:       "spec",
 		Message:     spec.Summary,
 	})
+
+	specComment := formatSpecComment(spec, issue.Number)
+	if err := s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number, specComment); err != nil {
+		return fmt.Errorf("publish spec comment: %w", err)
+	}
+
+	if err := s.ghClient.AddIssueLabel(ctx, s.RepoName, issue.Number, models.TRIAGED_LABEL); err != nil {
+		log.Warn("scheduler: failed to add triaged label", zap.Error(err))
+	}
 
 	return nil
 }
@@ -508,6 +508,16 @@ func (s *Scheduler) handleSlashCommand(
 			EventType:   "approve.received",
 			Message:     fmt.Sprintf("approved by @%s", cmd.Author),
 		})
+
+		if !s.hasValidSpec(ctx, issue.Number) {
+			log.Info("scheduler: approve received but no valid spec, generating spec first")
+			if err := s.runSpecStage(ctx, issue, ""); err != nil {
+				_ = s.db.MarkCommentProcessed(ctx, cmd.CommentID)
+				_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID(issue.Comments))
+				return fmt.Errorf("approve: generate spec: %w", err)
+			}
+		}
+
 		s.transitionIssueStage(ctx, issue.Number, models.StageApproved)
 		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
 			fmt.Sprintf("Plan approved by @%s. Starting implementation...", cmd.Author))
@@ -519,13 +529,13 @@ func (s *Scheduler) handleSlashCommand(
 	case slash.CmdSpec:
 		s.db.AppendEvent(ctx, storage.EventRecord{
 			IssueNumber: issue.Number,
-			EventType:   "revise.received",
-			Message:     fmt.Sprintf("revision requested by @%s: %s", cmd.Author, cmd.Feedback),
+			EventType:   "spec.rerun_received",
+			Message:     fmt.Sprintf("spec rerun requested by @%s", cmd.Author),
 		})
 		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
-			fmt.Sprintf("Revising plan based on feedback from @%s...", cmd.Author))
-		if err := s.runSpecStage(ctx, issue, cmd.Feedback); err != nil {
-			return fmt.Errorf("revise spec: %w", err)
+			fmt.Sprintf("Re-running spec analysis as requested by @%s...", cmd.Author))
+		if err := s.runSpecStage(ctx, issue, ""); err != nil {
+			return fmt.Errorf("rerun spec: %w", err)
 		}
 
 	case slash.CmdRevise:
@@ -616,8 +626,30 @@ func (s *Scheduler) runWorkStage(ctx context.Context, rec storage.IssueRecord) e
 	log := s.log.With(logger.WithIssue(rec.Number), logger.WithStage("work"))
 
 	spec := storage.ParseSpecJSON(rec.SpecJSON)
-	if spec == nil {
-		return fmt.Errorf("no spec found for issue %d", rec.Number)
+	if !specIsComplete(spec) {
+		log.Warn("scheduler: no valid spec at work stage, generating spec first")
+		issue, err := s.ghClient.ViewIssue(ctx, models.ViewIssueInput{
+			Repo:        s.RepoName,
+			IssueNumber: rec.Number,
+			CWD:         s.RepoPath,
+		})
+		if err != nil {
+			return fmt.Errorf("fetch issue for spec generation: %w", err)
+		}
+		if err := s.runSpecStage(ctx, issue, ""); err != nil {
+			s.transitionIssueStage(ctx, rec.Number, models.StageFailed)
+			return fmt.Errorf("generate spec: %w", err)
+		}
+		cached, err := s.db.GetIssue(ctx, rec.Number)
+		if err != nil || cached == nil {
+			s.transitionIssueStage(ctx, rec.Number, models.StageFailed)
+			return fmt.Errorf("read generated spec: %w", err)
+		}
+		spec = storage.ParseSpecJSON(cached.SpecJSON)
+		if !specIsComplete(spec) {
+			s.transitionIssueStage(ctx, rec.Number, models.StageFailed)
+			return fmt.Errorf("generated spec is invalid for issue %d", rec.Number)
+		}
 	}
 
 	runID, _ := s.db.StartRun(ctx, rec.Number, "work")
@@ -830,10 +862,10 @@ func (s *Scheduler) runReviewStage(ctx context.Context, rec storage.IssueRecord)
 		return nil
 	}
 
-	// Right now the review of pr is moved to human review after a fixed number of 
-	// Review runs. But what would be better a model runnning it and deciding if review 
+	// Right now the review of pr is moved to human review after a fixed number of
+	// Review runs. But what would be better a model runnning it and deciding if review
 	// Works as intended   (For that we might have to move a more TDD approach, get a test
-	// 						written first than do a solving pr - 
+	// 						written first than do a solving pr -
 	// 						for this we can even utilize sub issues)
 	iterations := rec.ReviewIterations
 	if iterations >= models.MaxReviewIterations {
@@ -1115,7 +1147,7 @@ func formatSpecComment(spec *models.SpecResult, issueNumber int64) string {
 	b.WriteString(spec.ImplementationPlan)
 	b.WriteString("\n\n---\n")
 	b.WriteString("_To approve this plan, comment `/sloper approve`\n")
-	b.WriteString("To request changes, comment `/sloper revise: <your feedback>`\n")
+	b.WriteString("To re-run the spec, comment `/sloper spec`\n")
 	b.WriteString("To abort, comment `/sloper abort`_")
 	return b.String()
 }
@@ -1211,6 +1243,24 @@ func maxCommentID(comments []models.CommentInfo) int64 {
 		}
 	}
 	return maxID
+}
+
+// specIsComplete reports whether a parsed spec has all the fields the
+// pipeline requires downstream.
+func specIsComplete(spec *models.SpecResult) bool {
+	return spec != nil &&
+		spec.Summary != "" &&
+		len(spec.FilesToChange) > 0 &&
+		spec.ImplementationPlan != ""
+}
+
+// hasValidSpec reports whether the issue has a stored, complete spec.
+func (s *Scheduler) hasValidSpec(ctx context.Context, issueNumber int64) bool {
+	cached, err := s.db.GetIssue(ctx, issueNumber)
+	if err != nil || cached == nil {
+		return false
+	}
+	return specIsComplete(storage.ParseSpecJSON(cached.SpecJSON))
 }
 
 func collectFeedbackFromCommentsExcludingBot(comments []models.CommentInfo, lastSeenID int64, botUser string) string {
