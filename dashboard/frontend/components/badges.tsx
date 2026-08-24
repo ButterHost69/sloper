@@ -49,9 +49,10 @@ export function ReviewStateBadge({ state }: { state: string }) {
     approved: '#34d399',
     changes_requested: '#f87171',
   };
+  const display = state && state.trim() ? state.replace(/_/g, ' ') : 'none';
   return (
-    <Badge color={colorMap[state] ?? '#94a3b8'} dot>
-      {state.replace(/_/g, ' ')}
+    <Badge color={colorMap[display] ?? '#94a3b8'} dot>
+      {display}
     </Badge>
   );
 }

@@ -1,5 +1,4 @@
 import type {
-  ActivityBucket,
   CommentRecord,
   EventRecord,
   Health,
@@ -83,9 +82,4 @@ export const api = {
     request<{ pulls: PullRecord[]; count: number }>(base, `/api/pulls?limit=${limit}`),
   events: (base: string, limit = 300) =>
     request<{ events: EventRecord[]; count: number }>(base, `/api/events?limit=${limit}`),
-  activity: (base: string, hours = 24) =>
-    request<{ hours: number; buckets: ActivityBucket[] }>(
-      base,
-      `/api/metrics/activity?hours=${hours}`,
-    ),
 };

@@ -1,0 +1,2 @@
+-- PR merge metadata: capture merged_at so merged PRs can be distinguished from closed ones
+ALTER TABLE pull_requests ADD COLUMN merged_at TEXT NOT NULL DEFAULT ''; -- GitHub merged_at (empty when not merged)

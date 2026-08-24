@@ -12,7 +12,6 @@ import {
   LayoutDashboard,
   ListChecks,
   Plus,
-  Server,
   Settings,
 } from 'lucide-react';
 import { useInstances } from '@/components/instance-context';
@@ -25,7 +24,6 @@ const NAV = [
   { href: '/issues', label: 'Issues', icon: ListChecks },
   { href: '/pulls', label: 'Pull Requests', icon: GitPullRequest },
   { href: '/runs', label: 'Runs', icon: Activity },
-  { href: '/events', label: 'Events', icon: Server },
   { href: '/instances', label: 'Instances', icon: Settings },
 ];
 

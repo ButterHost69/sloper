@@ -10,8 +10,16 @@ import { ErrorState, Panel } from '@/components/ui';
 import { RunsView } from '@/components/runs-view';
 import type { RunRecord } from '@/lib/types';
 
-const STATUSES = ['all', 'running', 'completed', 'failed', 'interrupted'];
+const STATUS_FILTERS = ['all', 'ongoing', 'failed'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 const STAGES = ['all', 'spec', 'work', 'review', 'fix', 'merge'];
+
+// The runs page is a monitor: show only what's in flux.
+// ongoing = actually running; failed + interrupted = dead runs needing attention
+// (interrupted = killed when sloper stopped, recovered on next boot).
+const isOngoing = (status: string) => status === 'running';
+const isFailed = (status: string) => status === 'failed' || status === 'interrupted';
+const keepsList = (status: string) => isOngoing(status) || isFailed(status);
 
 export default function RunsPage() {
   return (
@@ -24,28 +32,36 @@ export default function RunsPage() {
 function RunsPageInner() {
   const searchParams = useSearchParams();
   const statusParam = searchParams.get('status') ?? 'all';
-  const [status, setStatus] = useState(statusParam);
+  const [status, setStatus] = useState<StatusFilter>(
+    STATUS_FILTERS.includes(statusParam as StatusFilter) ? (statusParam as StatusFilter) : 'all',
+  );
   const [stage, setStage] = useState('all');
   const { data, error, refresh } = useInstanceData((base) => api.runs(base, 1000), 15000);
 
   // Keep the status filter in sync when the URL query param changes.
   useEffect(() => {
-    setStatus(statusParam);
+    setStatus(
+      STATUS_FILTERS.includes(statusParam as StatusFilter) ? (statusParam as StatusFilter) : 'all',
+    );
   }, [statusParam]);
 
   const filtered = useMemo(() => {
     const runs = data?.runs ?? [];
     return runs.filter(
       (r) =>
-        (status === 'all' || r.status === status) &&
+        (status === 'all' ? keepsList(r.status) : status === 'ongoing' ? isOngoing(r.status) : isFailed(r.status)) &&
         (stage === 'all' || r.stage === stage),
     );
   }, [data, status, stage]);
 
   const statusCounts = useMemo(() => {
-    const c: Record<string, number> = {};
-    for (const r of data?.runs ?? []) c[r.status] = (c[r.status] ?? 0) + 1;
-    return c;
+    let ongoing = 0;
+    let failed = 0;
+    for (const r of data?.runs ?? []) {
+      if (isOngoing(r.status)) ongoing++;
+      else if (isFailed(r.status)) failed++;
+    }
+    return { ongoing, failed, all: ongoing + failed };
   }, [data]);
 
   return (
@@ -53,7 +69,7 @@ function RunsPageInner() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-ink">Runs</h1>
         <p className="mt-1 text-xs text-ink-faint">
-          {data?.count ?? 0} pipeline executions · {filtered.length} shown
+          {filtered.length} in flight · completed runs hidden
         </p>
       </div>
 
@@ -63,7 +79,7 @@ function RunsPageInner() {
           <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Status</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {STATUSES.map((s) => (
+          {STATUS_FILTERS.map((s) => (
             <button
               key={s}
               onClick={() => setStatus(s)}
@@ -73,7 +89,7 @@ function RunsPageInner() {
               )}
             >
               {s}
-              {s !== 'all' && <span className="text-ink-faint">{statusCounts[s] ?? 0}</span>}
+              <span className="text-ink-faint">{statusCounts[s] ?? 0}</span>
             </button>
           ))}
         </div>
@@ -106,7 +122,7 @@ function RunsPageInner() {
           </div>
         </Panel>
       ) : (
-        <RunsView runs={filtered as RunRecord[]} defaultOpenFirst />
+        <RunsView runs={filtered as RunRecord[]} />
       )}
     </div>
   );

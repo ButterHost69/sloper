@@ -48,6 +48,8 @@ export interface Summary {
   pulls: {
     total: number;
     open: number;
+    merged: number;
+    closed: number;
   };
   events: {
     total: number;
@@ -117,8 +119,10 @@ export interface PullRecord {
   head_sha: string;
   base_sha: string;
   state: string;
+  raw_state: string;
   url: string;
   updated_at: string;
+  merged_at: string;
   review_state: string;
   last_review_at: string;
 }
@@ -132,13 +136,8 @@ export interface Spec {
 export interface IssueDetail {
   issue: Issue;
   spec: Spec | null;
-  comments: CommentRecord[];
-  runs: RunRecord[];
-  events: EventRecord[];
+  comments: CommentRecord[] | null;
+  runs: RunRecord[] | null;
+  events: EventRecord[] | null;
   pr: PullRecord | null;
-}
-
-export interface ActivityBucket {
-  time: string;
-  count: number;
 }

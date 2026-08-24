@@ -1,5 +1,6 @@
 'use client';
 
+import { Fragment } from 'react';
 import clsx from 'clsx';
 import { AlertOctagon, Check, Loader2 } from 'lucide-react';
 import { PIPELINE_ORDER, stageMeta } from '@/lib/stages';
@@ -39,87 +40,81 @@ export function PipelineDAG({ stage }: { stage: string }) {
   const states = computeStates(stage);
 
   return (
-    <div className="flex items-stretch gap-0 overflow-x-auto pb-1">
-      {PIPELINE_ORDER.map((key, i) => {
-        const meta = stageMeta(key);
-        const state = states[key] ?? 'next';
-        const isLast = i === PIPELINE_ORDER.length - 1;
-        return (
-          <div key={key} className="flex min-w-[86px] flex-1 items-center">
-            <div className="flex-1">
-              <div className="relative flex flex-col items-center gap-1.5">
-                {/* node */}
-                <div
-                  className={clsx(
-                    'relative flex h-9 w-9 items-center justify-center rounded-full border transition-all',
-                    state === 'done' && 'border-transparent',
-                    state === 'current' && 'border-transparent shadow-[0_0_16px]',
-                    state === 'next' && 'border-edge-2',
-                    state === 'failed' && 'border-danger/50 bg-danger/10 text-danger',
-                  )}
-                  style={
-                    state === 'done'
-                      ? { background: meta.color, color: '#04120c' }
-                      : state === 'current'
-                        ? {
-                            background: `${meta.color}22`,
-                            color: meta.color,
-                            borderColor: `${meta.color}66`,
-                            boxShadow: `0 0 18px ${meta.color}55`,
-                          }
-                        : undefined
-                  }
-                >
-                  {state === 'done' ? (
-                    <Check size={15} strokeWidth={3} />
-                  ) : state === 'current' ? (
-                    <Loader2 size={15} className="animate-spin" />
-                  ) : state === 'failed' ? (
-                    <AlertOctagon size={15} />
-                  ) : (
-                    <span className="text-[0.6rem] font-bold" style={{ color: meta.color }}>
-                      {i + 1}
-                    </span>
-                  )}
-                  {state === 'current' && (
-                    <span
-                      className="absolute inset-0 -z-10 animate-ping rounded-full opacity-30"
-                      style={{ background: meta.color }}
-                    />
-                  )}
-                </div>
-                <span
-                  className={clsx(
-                    'whitespace-nowrap text-[0.65rem] font-semibold',
-                    state === 'next' ? 'text-ink-faint' : 'text-ink-dim',
-                  )}
-                  style={state === 'done' || state === 'current' ? { color: meta.color } : undefined}
-                >
-                  {meta.label}
-                </span>
-                {!isLast && (
+    <div className="overflow-x-auto pb-1">
+      <div className="flex px-1">
+        {PIPELINE_ORDER.map((key, i) => {
+          const meta = stageMeta(key);
+          const state = states[key] ?? 'next';
+          const isLast = i === PIPELINE_ORDER.length - 1;
+          return (
+            <Fragment key={key}>
+              <div className="relative flex w-9 shrink-0 flex-col items-center">
+              {/* node */}
+              <div
+                className={clsx(
+                  'relative flex h-9 w-9 items-center justify-center rounded-full border transition-all',
+                  state === 'done' && 'border-transparent',
+                  state === 'current' && 'border-transparent shadow-[0_0_16px]',
+                  state === 'next' && 'border-edge-2',
+                  state === 'failed' && 'border-danger/50 bg-danger/10 text-danger',
+                )}
+                style={
+                  state === 'done'
+                    ? { background: meta.color, color: '#04120c' }
+                    : state === 'current'
+                      ? {
+                          background: `${meta.color}22`,
+                          color: meta.color,
+                          borderColor: `${meta.color}66`,
+                          boxShadow: `0 0 18px ${meta.color}55`,
+                        }
+                      : undefined
+                }
+              >
+                {state === 'done' ? (
+                  <Check size={15} strokeWidth={3} />
+                ) : state === 'current' ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : state === 'failed' ? (
+                  <AlertOctagon size={15} />
+                ) : (
+                  <span className="text-[0.6rem] font-bold" style={{ color: meta.color }}>
+                    {i + 1}
+                  </span>
+                )}
+                {state === 'current' && (
                   <span
-                    className={clsx(
-                      'absolute top-4 hidden h-0.5 w-[calc(100%+2.5rem)] left-1/2 sm:block',
-                      state === 'done' ? 'bg-accent/40' : 'bg-edge',
-                    )}
+                    className="absolute inset-0 -z-10 animate-ping rounded-full opacity-30"
+                    style={{ background: meta.color }}
                   />
                 )}
               </div>
+              <span
+                className={clsx(
+                  'mt-1.5 whitespace-nowrap text-[0.65rem] font-semibold',
+                  state === 'next' ? 'text-ink-faint' : 'text-ink-dim',
+                )}
+                style={state === 'done' || state === 'current' ? { color: meta.color } : undefined}
+              >
+                {meta.label}
+              </span>
             </div>
             {!isLast && (
-              <div className="mb-5 hidden h-0.5 flex-1 sm:block">
+              // Single connector per gap, aligned to the dot's vertical center
+              // (dot is h-9 → center at 18px; line is 2px → top at 17px).
+              <div className="mt-[17px] hidden h-0.5 min-w-4 flex-1 self-start sm:block">
                 <div
                   className={clsx(
                     'h-full w-full rounded-full transition-colors',
-                    state === 'done' ? 'bg-accent/50' : 'bg-edge',
+                    state === 'done' ? 'bg-accent/40' : 'bg-edge',
                   )}
                 />
               </div>
             )}
-          </div>
-        );
-      })}
+            </Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 }

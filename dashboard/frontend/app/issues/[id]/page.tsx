@@ -160,22 +160,22 @@ export default function IssueDetailPage() {
         <Panel
           title="Runs"
           action={
-            <span className="text-xs text-ink-faint">{data!.runs.length} executions</span>
+            <span className="text-xs text-ink-faint">{data!.runs?.length ?? 0} executions</span>
           }
           bodyClassName="p-2"
         >
-          <RunsView runs={data!.runs} defaultOpenFirst />
+          <RunsView runs={data!.runs ?? []} defaultOpenFirst />
         </Panel>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Comments */}
         <Panel title="Comments" bodyClassName="p-4">
-          {data!.comments.length === 0 ? (
+          {data!.comments?.length === 0 ? (
             <p className="py-6 text-center text-xs text-ink-faint">No cached comments.</p>
           ) : (
             <div className="space-y-3">
-              {data!.comments.map((c) => (
+              {data!.comments?.map((c) => (
                 <div key={c.id} className="rounded-lg border border-edge bg-panel-2 p-3">
                   <div className="mb-1.5 flex items-center gap-2 text-xs">
                     <span className="flex items-center gap-1 font-semibold text-ink">
@@ -204,7 +204,7 @@ export default function IssueDetailPage() {
 
         {/* Events */}
         <Panel title="Event timeline" bodyClassName="p-2">
-          <EventFeed events={data!.events} />
+          <EventFeed events={data!.events ?? []} />
         </Panel>
       </div>
 

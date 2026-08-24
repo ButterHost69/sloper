@@ -8,20 +8,49 @@ import type { Summary } from '@/lib/types';
 
 /**
  * Horizontal pipeline flow. Each node is a stage with a count.
- * The line between nodes is dimmed once the count reaches zero.
+ * spec-ongoing + spec-done and approved + work-done each share a single
+ * card with a split counter.
  */
+
+interface MergedStage {
+  cardKey: string;
+  mergedKey: string;
+  label: string;
+  /** Pinned ongoing count when the backend doesn't expose the stage yet. */
+  fixedOngoing?: number;
+}
+
+const MERGED_STAGES: MergedStage[] = [
+  { cardKey: 'spec-ongoing', mergedKey: 'spec-done', label: 'Spec' },
+  { cardKey: 'approved', mergedKey: 'work-done', label: 'Working' },
+  // Reviewing stage to be added in Sloper soon — until then the ongoing
+  // counter is pinned at 0 and only review-done is shown.
+  { cardKey: 'review-done', mergedKey: '', label: 'Review', fixedOngoing: 0 },
+];
+
 export function PipelineFunnel({ summary }: { summary: Summary }) {
   const byStage = summary?.issues?.by_stage ?? {};
-  const total = Math.max(1, summary?.issues?.total ?? 1);
   const failedCount = byStage['failed'] ?? 0;
   const router = useRouter();
 
   return (
     <div className="flex items-stretch gap-1.5 overflow-x-auto pb-1">
       {PIPELINE_ORDER.map((key, i) => {
-        const meta = stageMeta(key);
-        const count = byStage[key] ?? 0;
-        const pct = Math.round((count / total) * 100);
+        const merged = MERGED_STAGES.find(
+          (m) => m.cardKey === key || (m.mergedKey !== '' && m.mergedKey === key),
+        );
+        if (merged && merged.mergedKey !== '' && key === merged.mergedKey) return null; // merged into the cardKey card
+        const isCard = merged?.cardKey === key;
+        const meta = isCard ? { ...stageMeta(key), label: merged!.label } : stageMeta(key);
+        const ongoing = isCard
+          ? (merged!.fixedOngoing ?? (byStage[merged!.cardKey] ?? 0))
+          : 0;
+        const done = isCard
+          ? merged!.mergedKey !== ''
+            ? (byStage[merged!.mergedKey] ?? 0)
+            : (byStage[merged!.cardKey] ?? 0)
+          : 0;
+        const count = isCard ? ongoing + done : (byStage[key] ?? 0);
         const isLast = i === PIPELINE_ORDER.length - 1;
         return (
           <div key={key} className="flex min-w-[92px] flex-1 items-center gap-1.5">
@@ -39,12 +68,13 @@ export function PipelineFunnel({ summary }: { summary: Summary }) {
               <p className="mt-1.5 truncate text-[0.68rem] font-medium text-ink-dim">
                 {meta.label}
               </p>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-edge">
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{ width: `${pct}%`, background: meta.color, opacity: 0.75 }}
-                />
-              </div>
+              {isCard ? (
+                <p className="mt-0.5 truncate text-[0.62rem] tabular-nums text-ink-faint">
+                  {ongoing} ongoing · {done} done
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[0.62rem]">&nbsp;</p>
+              )}
             </button>
             {!isLast && (
               <ArrowRight
@@ -69,12 +99,6 @@ export function PipelineFunnel({ summary }: { summary: Summary }) {
             <span className="text-lg font-semibold tabular-nums text-danger">{failedCount}</span>
           </div>
           <p className="mt-1.5 text-[0.68rem] font-medium text-danger">Failed</p>
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-danger/20">
-            <div
-              className="h-full rounded-full bg-danger transition-all duration-500"
-              style={{ width: `${Math.round((failedCount / total) * 100)}%`, opacity: 0.8 }}
-            />
-          </div>
         </button>
       )}
     </div>

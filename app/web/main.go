@@ -203,8 +203,10 @@ func (s *webServer) handleSummary(w http.ResponseWriter, r *http.Request) {
 			"interrupted": runStatuses["interrupted"],
 		},
 		"pulls": map[string]any{
-			"total": totalPulls,
-			"open":  prStates["open"],
+			"total":  totalPulls,
+			"open":   prStates["open"],
+			"merged": prStates["merged"],
+			"closed": prStates["closed"],
 		},
 		"events": map[string]any{
 			"total":   eventTotal,
@@ -246,9 +248,21 @@ func (s *webServer) handleIssueDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	comments, _ := s.db.ListCommentsByIssue(ctx, num)
-	runs, _ := s.db.ListRunsByIssue(ctx, num)
-	events, _ := s.db.ListEventsByIssue(ctx, num)
+	comments, err := s.db.ListCommentsByIssue(ctx, num)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "web: list comments for issue", num, "failed:", err)
+		comments = []storage.CommentRecord{}
+	}
+	runs, err := s.db.ListRunsByIssue(ctx, num)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "web: list runs for issue", num, "failed:", err)
+		runs = []storage.RunRecord{}
+	}
+	events, err := s.db.ListEventsByIssue(ctx, num)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "web: list events for issue", num, "failed:", err)
+		events = []storage.EventRecordFull{}
+	}
 
 	var pr *map[string]any
 	if issue.PRNumber != 0 {
@@ -380,15 +394,21 @@ func issueJSON(it storage.IssueRecord) map[string]any {
 }
 
 func prJSON(p storage.PRRecord) map[string]any {
+	displayState := p.State
+	if p.State == "closed" && p.MergedAt != "" {
+		displayState = "merged"
+	}
 	return map[string]any{
 		"number":         p.Number,
 		"issue_number":   p.IssueNumber,
 		"title":          p.Title,
 		"head_sha":       p.HeadSHA,
 		"base_sha":       p.BaseSHA,
-		"state":          p.State,
+		"state":          displayState,
+		"raw_state":      p.State,
 		"url":            p.URL,
 		"updated_at":     p.UpdatedAt,
+		"merged_at":      p.MergedAt,
 		"review_state":   p.ReviewState,
 		"last_review_at": p.LastReviewAt,
 	}

@@ -123,6 +123,18 @@ func (r *Repositories) UpdateIssueStage(ctx context.Context, number int64, stage
 	return nil
 }
 
+// UpdateIssueState refreshes the cached GitHub state (open/closed) of an issue.
+func (r *Repositories) UpdateIssueState(ctx context.Context, number int64, state string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE issues SET state = ? WHERE number = ?",
+		state, number,
+	)
+	if err != nil {
+		return fmt.Errorf("storage: update issue %d state: %w", number, err)
+	}
+	return nil
+}
+
 func (r *Repositories) UpdateIssueSpec(ctx context.Context, number int64, specJSON string) error {
 	_, err := r.db.ExecContext(ctx,
 		"UPDATE issues SET spec_json = ?, updated_at_local = ? WHERE number = ?",
@@ -185,7 +197,7 @@ func (r *Repositories) GetIssuesByStage(ctx context.Context, stage string) ([]Is
 	}
 	defer rows.Close()
 
-	var out []IssueRecord
+	out := make([]IssueRecord, 0)
 	for rows.Next() {
 		var rec IssueRecord
 		var labelsJSON string
@@ -253,7 +265,7 @@ func (r *Repositories) GetUnprocessedComments(ctx context.Context, issueNumber i
 	}
 	defer rows.Close()
 
-	var out []CommentRecord
+	out := make([]CommentRecord, 0)
 	for rows.Next() {
 		var rec CommentRecord
 		var processed int
@@ -311,6 +323,7 @@ type PRRecord struct {
 	State        string
 	URL          string
 	UpdatedAt    string
+	MergedAt     string
 	ReviewState  string
 	LastReviewAt string
 }
@@ -318,8 +331,8 @@ type PRRecord struct {
 func (r *Repositories) UpsertPR(ctx context.Context, rec PRRecord) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO pull_requests (number, issue_number, title, head_sha, base_sha,
-		                           state, url, updated_at, review_state, last_review_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		                           state, url, updated_at, merged_at, review_state, last_review_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(number) DO UPDATE SET
 			issue_number = excluded.issue_number,
 			title = excluded.title,
@@ -328,9 +341,10 @@ func (r *Repositories) UpsertPR(ctx context.Context, rec PRRecord) error {
 			state = excluded.state,
 			url = excluded.url,
 			updated_at = excluded.updated_at,
+			merged_at = excluded.merged_at,
 			review_state = excluded.review_state
 	`, rec.Number, rec.IssueNumber, rec.Title, rec.HeadSHA, rec.BaseSHA,
-		rec.State, rec.URL, rec.UpdatedAt, rec.ReviewState,
+		rec.State, rec.URL, rec.UpdatedAt, rec.MergedAt, rec.ReviewState,
 		nullableString(rec.LastReviewAt))
 	if err != nil {
 		return fmt.Errorf("storage: upsert pr %d: %w", rec.Number, err)
@@ -338,17 +352,29 @@ func (r *Repositories) UpsertPR(ctx context.Context, rec PRRecord) error {
 	return nil
 }
 
+// UpdatePRState refreshes the cached PR state/merge metadata observed from GitHub.
+func (r *Repositories) UpdatePRState(ctx context.Context, number int64, state, updatedAt, mergedAt string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE pull_requests SET state = ?, updated_at = ?, merged_at = ?
+		WHERE number = ?`,
+		state, updatedAt, mergedAt, number)
+	if err != nil {
+		return fmt.Errorf("storage: update pr %d state: %w", number, err)
+	}
+	return nil
+}
+
 func (r *Repositories) GetPR(ctx context.Context, prNumber int64) (*PRRecord, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT number, issue_number, title, head_sha, base_sha, state, url,
-		       updated_at, review_state, COALESCE(last_review_at, '')
+		       updated_at, COALESCE(merged_at, ''), review_state, COALESCE(last_review_at, '')
 		FROM pull_requests WHERE number = ?
 	`, prNumber)
 
 	var rec PRRecord
 	err := row.Scan(&rec.Number, &rec.IssueNumber, &rec.Title, &rec.HeadSHA,
-		&rec.BaseSHA, &rec.State, &rec.URL, &rec.UpdatedAt, &rec.ReviewState,
-		&rec.LastReviewAt)
+		&rec.BaseSHA, &rec.State, &rec.URL, &rec.UpdatedAt, &rec.MergedAt,
+		&rec.ReviewState, &rec.LastReviewAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -436,7 +462,7 @@ func (r *Repositories) GetInterruptedRuns(ctx context.Context) ([]RunRecord, err
 	}
 	defer rows.Close()
 
-	var out []RunRecord
+	out := make([]RunRecord, 0)
 	for rows.Next() {
 		rec, err := scanRun(rows)
 		if err != nil {

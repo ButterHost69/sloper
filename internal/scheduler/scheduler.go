@@ -392,7 +392,7 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 	s.db.AppendEvent(ctx, storage.EventRecord{
 		IssueNumber: issue.Number,
 		EventType:   "spec.replyComment",
-		Stage:       "replyCommnet",
+		Stage:       "replyComment",
 		Message:     _type,
 	})
 
@@ -838,14 +838,20 @@ func (s *Scheduler) processReviewDoneIssues(ctx context.Context) {
 			logger.WithIssue(rec.Number), logger.WithPR(rec.PRNumber),
 			zap.String("pr_state", pr.State))
 		s.cleanupIssueSessions(rec.Number)
-		s.transitionIssueStage(ctx, rec.Number, models.StageMerged)
-		s.db.AppendEvent(ctx, storage.EventRecord{
-			IssueNumber: rec.Number,
-			PRNumber:    rec.PRNumber,
-			EventType:   "cleanup.sessions_deleted",
-			Stage:       "merged",
-			Message:     fmt.Sprintf("PR %s, sessions cleaned up", pr.State),
-		})
+		_ = s.db.UpdatePRState(ctx, rec.PRNumber, pr.State, pr.UpdatedAt, pr.MergedAt)
+		_ = s.db.UpdateIssueState(ctx, rec.Number, "closed")
+
+		firstTransition := rec.Stage != models.StageMerged
+		if firstTransition {
+			s.transitionIssueStage(ctx, rec.Number, models.StageMerged)
+			s.db.AppendEvent(ctx, storage.EventRecord{
+				IssueNumber: rec.Number,
+				PRNumber:    rec.PRNumber,
+				EventType:   "cleanup.sessions_deleted",
+				Stage:       "merged",
+				Message:     fmt.Sprintf("PR %s, sessions cleaned up", pr.State),
+			})
+		}
 	}
 }
 
@@ -858,6 +864,8 @@ func (s *Scheduler) runReviewStage(ctx context.Context, rec storage.IssueRecord)
 		return fmt.Errorf("get pr: %w", err)
 	}
 	if prInfo == nil || prInfo.State != "open" {
+		_ = s.db.UpdatePRState(ctx, rec.PRNumber, prInfo.State, prInfo.UpdatedAt, prInfo.MergedAt)
+		_ = s.db.UpdateIssueState(ctx, rec.Number, "closed")
 		s.transitionIssueStage(ctx, rec.Number, models.StageMerged)
 		return nil
 	}

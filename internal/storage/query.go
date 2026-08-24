@@ -65,7 +65,7 @@ func (r *Repositories) ListIssues(ctx context.Context, limit, offset int) ([]Iss
 	}
 	defer rows.Close()
 
-	var out []IssueRecord
+	out := make([]IssueRecord, 0)
 	for rows.Next() {
 		rec, err := scanIssue(rows)
 		if err != nil {
@@ -110,7 +110,7 @@ func (r *Repositories) ListIssuesFiltered(ctx context.Context, limit, offset int
 	}
 	defer rows.Close()
 
-	var out []IssueRecord
+	out := make([]IssueRecord, 0)
 	for rows.Next() {
 		rec, err := scanIssue(rows)
 		if err != nil {
@@ -172,7 +172,7 @@ func (r *Repositories) ListCommentsByIssue(ctx context.Context, issueNumber int6
 	}
 	defer rows.Close()
 
-	var out []CommentRecord
+	out := make([]CommentRecord, 0)
 	for rows.Next() {
 		var rec CommentRecord
 		var processed int
@@ -194,7 +194,7 @@ func (r *Repositories) ListPRs(ctx context.Context, limit int) ([]PRRecord, erro
 	}
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT number, issue_number, title, head_sha, base_sha, state, url,
-		       updated_at, review_state, COALESCE(last_review_at, '')
+		       updated_at, COALESCE(merged_at, ''), review_state, COALESCE(last_review_at, '')
 		FROM pull_requests
 		ORDER BY number DESC
 		LIMIT ?`, limit)
@@ -203,12 +203,12 @@ func (r *Repositories) ListPRs(ctx context.Context, limit int) ([]PRRecord, erro
 	}
 	defer rows.Close()
 
-	var out []PRRecord
+	out := make([]PRRecord, 0)
 	for rows.Next() {
 		var rec PRRecord
 		if err := rows.Scan(&rec.Number, &rec.IssueNumber, &rec.Title, &rec.HeadSHA,
-			&rec.BaseSHA, &rec.State, &rec.URL, &rec.UpdatedAt, &rec.ReviewState,
-			&rec.LastReviewAt); err != nil {
+			&rec.BaseSHA, &rec.State, &rec.URL, &rec.UpdatedAt, &rec.MergedAt,
+			&rec.ReviewState, &rec.LastReviewAt); err != nil {
 			return nil, fmt.Errorf("storage: scan pr: %w", err)
 		}
 		out = append(out, rec)
@@ -217,9 +217,12 @@ func (r *Repositories) ListPRs(ctx context.Context, limit int) ([]PRRecord, erro
 }
 
 // CountPRsByState returns state -> count for all cached pull requests.
+// Merged PRs (closed on GitHub with a merged_at) are counted under "merged".
 func (r *Repositories) CountPRsByState(ctx context.Context) (map[string]int, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT state, COUNT(*) FROM pull_requests GROUP BY state`)
+		SELECT CASE WHEN state = 'closed' AND merged_at != '' THEN 'merged' ELSE state END,
+		       COUNT(*)
+		FROM pull_requests GROUP BY 1`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: count prs by state: %w", err)
 	}
@@ -251,7 +254,7 @@ func (r *Repositories) ListRuns(ctx context.Context, limit, offset int) ([]RunRe
 	}
 	defer rows.Close()
 
-	var out []RunRecord
+	out := make([]RunRecord, 0)
 	for rows.Next() {
 		rec, err := scanRun(rows)
 		if err != nil {
@@ -272,7 +275,7 @@ func (r *Repositories) ListRunsByIssue(ctx context.Context, issueNumber int64) (
 	}
 	defer rows.Close()
 
-	var out []RunRecord
+	out := make([]RunRecord, 0)
 	for rows.Next() {
 		rec, err := scanRun(rows)
 		if err != nil {
@@ -339,7 +342,7 @@ func (r *Repositories) ListEvents(ctx context.Context, limit, offset int) ([]Eve
 	}
 	defer rows.Close()
 
-	var out []EventRecordFull
+	out := make([]EventRecordFull, 0)
 	for rows.Next() {
 		var rec EventRecordFull
 		var ctxJSON string
@@ -365,7 +368,7 @@ func (r *Repositories) ListEventsByIssue(ctx context.Context, issueNumber int64)
 	}
 	defer rows.Close()
 
-	var out []EventRecordFull
+	out := make([]EventRecordFull, 0)
 	for rows.Next() {
 		var rec EventRecordFull
 		var ctxJSON string
