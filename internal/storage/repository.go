@@ -123,6 +123,18 @@ func (r *Repositories) UpdateIssueStage(ctx context.Context, number int64, stage
 	return nil
 }
 
+// UpdateIssueState refreshes the cached GitHub state (open/closed) of an issue.
+func (r *Repositories) UpdateIssueState(ctx context.Context, number int64, state string) error {
+	_, err := r.db.ExecContext(ctx,
+		"UPDATE issues SET state = ? WHERE number = ?",
+		state, number,
+	)
+	if err != nil {
+		return fmt.Errorf("storage: update issue %d state: %w", number, err)
+	}
+	return nil
+}
+
 func (r *Repositories) UpdateIssueSpec(ctx context.Context, number int64, specJSON string) error {
 	_, err := r.db.ExecContext(ctx,
 		"UPDATE issues SET spec_json = ?, updated_at_local = ? WHERE number = ?",
@@ -185,7 +197,7 @@ func (r *Repositories) GetIssuesByStage(ctx context.Context, stage string) ([]Is
 	}
 	defer rows.Close()
 
-	var out []IssueRecord
+	out := make([]IssueRecord, 0)
 	for rows.Next() {
 		var rec IssueRecord
 		var labelsJSON string
@@ -211,14 +223,14 @@ func (r *Repositories) GetIssuesByStage(ctx context.Context, stage string) ([]Is
 // ─── Issue Comment Repository ─────────────────────────────────────────
 
 type CommentRecord struct {
-	ID           int64
-	IssueNumber  int64
-	Author       string
-	Body         string
-	CreatedAt    string
-	Processed    bool
-	InReplyToID  int64
-	RepliedByBot bool
+	ID           int64  `json:"id"`
+	IssueNumber  int64  `json:"issue_number"`
+	Author       string `json:"author"`
+	Body         string `json:"body"`
+	CreatedAt    string `json:"created_at"`
+	Processed    bool   `json:"processed"`
+	InReplyToID  int64  `json:"in_reply_to_id"`
+	RepliedByBot bool   `json:"replied_by_bot"`
 }
 
 func (r *Repositories) InsertComment(ctx context.Context, c CommentRecord) error {
@@ -253,7 +265,7 @@ func (r *Repositories) GetUnprocessedComments(ctx context.Context, issueNumber i
 	}
 	defer rows.Close()
 
-	var out []CommentRecord
+	out := make([]CommentRecord, 0)
 	for rows.Next() {
 		var rec CommentRecord
 		var processed int
@@ -311,6 +323,7 @@ type PRRecord struct {
 	State        string
 	URL          string
 	UpdatedAt    string
+	MergedAt     string
 	ReviewState  string
 	LastReviewAt string
 }
@@ -318,8 +331,8 @@ type PRRecord struct {
 func (r *Repositories) UpsertPR(ctx context.Context, rec PRRecord) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO pull_requests (number, issue_number, title, head_sha, base_sha,
-		                           state, url, updated_at, review_state, last_review_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		                           state, url, updated_at, merged_at, review_state, last_review_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(number) DO UPDATE SET
 			issue_number = excluded.issue_number,
 			title = excluded.title,
@@ -328,9 +341,10 @@ func (r *Repositories) UpsertPR(ctx context.Context, rec PRRecord) error {
 			state = excluded.state,
 			url = excluded.url,
 			updated_at = excluded.updated_at,
+			merged_at = excluded.merged_at,
 			review_state = excluded.review_state
 	`, rec.Number, rec.IssueNumber, rec.Title, rec.HeadSHA, rec.BaseSHA,
-		rec.State, rec.URL, rec.UpdatedAt, rec.ReviewState,
+		rec.State, rec.URL, rec.UpdatedAt, rec.MergedAt, rec.ReviewState,
 		nullableString(rec.LastReviewAt))
 	if err != nil {
 		return fmt.Errorf("storage: upsert pr %d: %w", rec.Number, err)
@@ -338,17 +352,29 @@ func (r *Repositories) UpsertPR(ctx context.Context, rec PRRecord) error {
 	return nil
 }
 
+// UpdatePRState refreshes the cached PR state/merge metadata observed from GitHub.
+func (r *Repositories) UpdatePRState(ctx context.Context, number int64, state, updatedAt, mergedAt string) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE pull_requests SET state = ?, updated_at = ?, merged_at = ?
+		WHERE number = ?`,
+		state, updatedAt, mergedAt, number)
+	if err != nil {
+		return fmt.Errorf("storage: update pr %d state: %w", number, err)
+	}
+	return nil
+}
+
 func (r *Repositories) GetPR(ctx context.Context, prNumber int64) (*PRRecord, error) {
 	row := r.db.QueryRowContext(ctx, `
 		SELECT number, issue_number, title, head_sha, base_sha, state, url,
-		       updated_at, review_state, COALESCE(last_review_at, '')
+		       updated_at, COALESCE(merged_at, ''), review_state, COALESCE(last_review_at, '')
 		FROM pull_requests WHERE number = ?
 	`, prNumber)
 
 	var rec PRRecord
 	err := row.Scan(&rec.Number, &rec.IssueNumber, &rec.Title, &rec.HeadSHA,
-		&rec.BaseSHA, &rec.State, &rec.URL, &rec.UpdatedAt, &rec.ReviewState,
-		&rec.LastReviewAt)
+		&rec.BaseSHA, &rec.State, &rec.URL, &rec.UpdatedAt, &rec.MergedAt,
+		&rec.ReviewState, &rec.LastReviewAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -361,17 +387,17 @@ func (r *Repositories) GetPR(ctx context.Context, prNumber int64) (*PRRecord, er
 // ─── Run Repository ───────────────────────────────────────────────────
 
 type RunRecord struct {
-	ID             int64
-	IssueNumber    int64
-	Stage          string
-	Status         string
-	CheckpointJSON string
-	AgentOutput    string
-	AgentThinking  string
-	ShellLog       string
-	StartedAt      string
-	EndedAt        string
-	ErrorMessage   string
+	ID             int64  `json:"id"`
+	IssueNumber    int64  `json:"issue_number"`
+	Stage          string `json:"stage"`
+	Status         string `json:"status"`
+	CheckpointJSON string `json:"checkpoint_json"`
+	AgentOutput    string `json:"agent_output"`
+	AgentThinking  string `json:"agent_thinking"`
+	ShellLog       string `json:"shell_log"`
+	StartedAt      string `json:"started_at"`
+	EndedAt        string `json:"ended_at"`
+	ErrorMessage   string `json:"error_message"`
 }
 
 func (r *Repositories) StartRun(ctx context.Context, issueNumber int64, stage string) (int64, error) {
@@ -411,33 +437,24 @@ func (r *Repositories) FailRun(ctx context.Context, runID int64, errMsg string) 
 
 func (r *Repositories) GetLatestRun(ctx context.Context, issueNumber int64) (*RunRecord, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, issue_number, stage, status, COALESCE(checkpoint_json, ''),
-		       COALESCE(agent_output, ''), COALESCE(agent_thinking, ''),
-		       COALESCE(shell_log, ''), started_at, COALESCE(ended_at, ''),
-		       COALESCE(error_message, '')
+		SELECT `+runColumns+`
 		FROM runs WHERE issue_number = ?
 		ORDER BY id DESC LIMIT 1
 	`, issueNumber)
 
-	var rec RunRecord
-	err := row.Scan(&rec.ID, &rec.IssueNumber, &rec.Stage, &rec.Status,
-		&rec.CheckpointJSON, &rec.AgentOutput, &rec.AgentThinking,
-		&rec.ShellLog, &rec.StartedAt, &rec.EndedAt, &rec.ErrorMessage)
+	rec, err := scanRun(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("storage: get latest run for issue %d: %w", issueNumber, err)
 	}
-	return &rec, nil
+	return rec, nil
 }
 
 func (r *Repositories) GetInterruptedRuns(ctx context.Context) ([]RunRecord, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, issue_number, stage, status, COALESCE(checkpoint_json, ''),
-		       COALESCE(agent_output, ''), COALESCE(agent_thinking, ''),
-		       COALESCE(shell_log, ''), started_at, COALESCE(ended_at, ''),
-		       COALESCE(error_message, '')
+		SELECT `+runColumns+`
 		FROM runs WHERE status = 'running'
 	`)
 	if err != nil {
@@ -445,15 +462,13 @@ func (r *Repositories) GetInterruptedRuns(ctx context.Context) ([]RunRecord, err
 	}
 	defer rows.Close()
 
-	var out []RunRecord
+	out := make([]RunRecord, 0)
 	for rows.Next() {
-		var rec RunRecord
-		if err := rows.Scan(&rec.ID, &rec.IssueNumber, &rec.Stage, &rec.Status,
-			&rec.CheckpointJSON, &rec.AgentOutput, &rec.AgentThinking,
-			&rec.ShellLog, &rec.StartedAt, &rec.EndedAt, &rec.ErrorMessage); err != nil {
+		rec, err := scanRun(rows)
+		if err != nil {
 			return nil, fmt.Errorf("storage: scan run: %w", err)
 		}
-		out = append(out, rec)
+		out = append(out, *rec)
 	}
 	return out, rows.Err()
 }
