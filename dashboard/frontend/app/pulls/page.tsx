@@ -1,29 +1,33 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink, GitMerge, GitPullRequest, Search } from 'lucide-react';
 import clsx from 'clsx';
 import { useInstanceData } from '@/hooks/use-instance-data';
+import { useInstances } from '@/components/instance-context';
 import { api } from '@/lib/api';
 import { shortSha, timeAgo } from '@/lib/format';
 import type { PullRecord } from '@/lib/types';
 import { PageHeader } from '@/components/page-header';
-import { Badge, EmptyState, ErrorState, Panel, Skeleton } from '@/components/ui';
+import { Badge, EmptyState, ErrorState, Panel, Skeleton, StaleDataNotice } from '@/components/ui';
 
-type WorkflowStatus = 'reviewing' | 'human' | 'other';
+type WorkflowStatus = 'reviewing' | 'ready' | 'attention' | 'unknown' | 'other';
 type PullStateFilter = 'all' | 'open' | 'merged' | 'closed';
+const PAGE_SIZE = 500;
 
 const WORKFLOW_META: Record<WorkflowStatus, { label: string; color: string }> = {
   reviewing: { label: 'Being reviewed', color: '#60a5fa' },
-  human: { label: 'Human acceptance', color: '#f5ad31' },
-  other: { label: 'Other', color: '#94a3b8' },
+  ready: { label: 'Human acceptance', color: '#4ed17e' },
+  attention: { label: 'Manual review needed', color: '#f87171' },
+  unknown: { label: 'Workflow unavailable', color: '#8b8b93' },
+  other: { label: 'Other', color: '#a78bfa' },
 };
 
 const STATE_META: Record<Exclude<PullStateFilter, 'all'>, { label: string; color: string }> = {
   open: { label: 'Open', color: '#4ed17e' },
   merged: { label: 'Merged', color: '#a78bfa' },
-  closed: { label: 'Closed', color: '#94a3b8' },
+  closed: { label: 'Closed', color: '#8b8b93' },
 };
 
 const STATE_FILTERS: Array<{ key: PullStateFilter; label: string }> = [
@@ -34,8 +38,10 @@ const STATE_FILTERS: Array<{ key: PullStateFilter; label: string }> = [
 ];
 
 function workflowStatus(stage: string | undefined): WorkflowStatus {
+  if (!stage) return 'unknown';
   if (stage === 'work-done') return 'reviewing';
-  if (stage === 'review-done' || stage === 'failed') return 'human';
+  if (stage === 'review-done') return 'ready';
+  if (stage === 'failed') return 'attention';
   return 'other';
 }
 
@@ -112,10 +118,32 @@ function PullCard({
 }
 
 export default function PullsPage() {
+  const { active } = useInstances();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<PullStateFilter>('all');
-  const { data, error, refresh } = useInstanceData((base) => api.pulls(base, 500), 15000);
-  const { data: issuesData } = useInstanceData((base) => api.issues(base, { limit: 500 }), 30000);
+  const [olderPulls, setOlderPulls] = useState<PullRecord[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<Error | null>(null);
+  const [exhausted, setExhausted] = useState(false);
+  const activeUrlRef = useRef(active?.url);
+  const { data, error, refresh } = useInstanceData(
+    (base) => api.pulls(base, PAGE_SIZE),
+    15000,
+  );
+  const { data: issuesData, error: issuesError } = useInstanceData(
+    (base) => api.issues(base, { limit: 5000 }),
+    30000,
+  );
+
+  useEffect(() => {
+    activeUrlRef.current = active?.url;
+    setOlderPulls([]);
+    setMoreError(null);
+    setExhausted(false);
+    setLoadingMore(false);
+  }, [active?.url]);
+
+  const hasMore = !exhausted && (data?.pulls.length ?? 0) === PAGE_SIZE;
 
   const issueById = useMemo(() => {
     const map = new Map<number, { stage: string; review_iterations: number }>();
@@ -128,7 +156,12 @@ export default function PullsPage() {
     return map;
   }, [issuesData]);
 
-  const allPulls = data?.pulls ?? [];
+  const allPulls = useMemo(() => {
+    const byNumber = new Map<number, PullRecord>();
+    for (const pull of [...(data?.pulls ?? []), ...olderPulls]) byNumber.set(pull.number, pull);
+    return [...byNumber.values()];
+  }, [data, olderPulls]);
+
   const counts = useMemo(
     () => ({
       all: allPulls.length,
@@ -159,12 +192,35 @@ export default function PullsPage() {
     [filtered],
   );
 
+  const loadMore = async () => {
+    if (!active || loadingMore || !hasMore) return;
+    const requestUrl = active.url;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const cursor = allPulls[allPulls.length - 1]?.number;
+      if (!cursor) return;
+      const next = await api.pulls(requestUrl, PAGE_SIZE, 0, cursor);
+      if (activeUrlRef.current !== requestUrl) return;
+      setOlderPulls((current) => [...current, ...next.pulls]);
+      setExhausted(next.pulls.length < PAGE_SIZE);
+    } catch (loadError) {
+      if (activeUrlRef.current === requestUrl) {
+        setMoreError(
+          loadError instanceof Error ? loadError : new Error('Could not load older pull requests'),
+        );
+      }
+    } finally {
+      if (activeUrlRef.current === requestUrl) setLoadingMore(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Pull Requests"
         title="Pull requests"
-        subtitle={`${counts.all} total · ${counts.open} open · ${counts.merged} merged`}
+        subtitle={`${counts.all} loaded · ${counts.open} open · ${counts.merged} merged`}
         actions={
           <div className="relative w-full lg:w-80">
             <Search
@@ -202,60 +258,100 @@ export default function PullsPage() {
         ))}
       </div>
 
+      {issuesError && (
+        <p className="text-xs text-warn" role="status">
+          Workflow metadata is unavailable; cards still show GitHub state and pull request details.
+        </p>
+      )}
+
+      {error && data && <StaleDataNotice error={error} onRetry={refresh} label="pull request" />}
+
       {error && !data ? (
         <Panel>
           <ErrorState error={error} onRetry={refresh} />
         </Panel>
       ) : !data ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <Skeleton key={index} className="h-48 w-full" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <Panel>
-          <EmptyState
-            icon={<GitPullRequest size={19} />}
-            title={allPulls.length ? 'No matching pull requests' : 'No pull requests yet'}
-            hint="Pull requests created by implemented issues appear here with their current GitHub state."
-          />
-        </Panel>
+        active ? (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} className="h-48 w-full" />
+            ))}
+          </div>
+        ) : (
+          <Panel>
+            <EmptyState
+              icon={<GitPullRequest size={19} />}
+              title="Connect an instance to inspect pull requests"
+              hint="Pull request state and workflow metadata come from the read-only Sloper API."
+              action={
+                <Link href="/instances" className="btn btn-primary mt-1">
+                  Configure an instance
+                </Link>
+              }
+            />
+          </Panel>
+        )
       ) : (
-        <div className="space-y-7">
-          {groups.map((group) => {
-            const meta = STATE_META[group.state];
-            return (
-              <section key={group.state} aria-labelledby={`pulls-${group.state}`}>
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: meta.color }}
-                      aria-hidden="true"
-                    />
-                    <h2 id={`pulls-${group.state}`} className="text-sm font-semibold text-ink">
-                      {meta.label}
-                    </h2>
-                    <span className="text-[10px] text-ink-faint">{group.pulls.length}</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-                  {group.pulls.map((pull) => {
-                    const issue = issueById.get(pull.issue_number);
-                    return (
-                      <PullCard
-                        key={pull.number}
-                        pr={pull}
-                        workflow={workflowStatus(issue?.stage)}
-                        iterations={issue?.review_iterations ?? 0}
-                      />
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        <>
+          {filtered.length === 0 ? (
+            <Panel>
+              <EmptyState
+                icon={<GitPullRequest size={19} />}
+                title={allPulls.length ? 'No matching pull requests' : 'No pull requests yet'}
+                hint="Pull requests created by implemented issues appear here with their current GitHub state."
+              />
+            </Panel>
+          ) : (
+            <div className="space-y-7">
+              {groups.map((group) => {
+                const meta = STATE_META[group.state];
+                return (
+                  <section key={group.state} aria-labelledby={`pulls-${group.state}`}>
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: meta.color }}
+                          aria-hidden="true"
+                        />
+                        <h2 id={`pulls-${group.state}`} className="text-sm font-semibold text-ink">
+                          {meta.label}
+                        </h2>
+                        <span className="text-[10px] text-ink-faint">{group.pulls.length}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                      {group.pulls.map((pull) => {
+                        const issue = issueById.get(pull.issue_number);
+                        return (
+                          <PullCard
+                            key={pull.number}
+                            pr={pull}
+                            workflow={workflowStatus(issue?.stage)}
+                            iterations={issue?.review_iterations ?? 0}
+                          />
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+          {(hasMore || loadingMore || moreError) && (
+            <div className="flex flex-col items-center gap-2">
+              {moreError && <p className="text-xs text-danger">{moreError.message}</p>}
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void loadMore()}
+                disabled={loadingMore || !hasMore}
+              >
+                {loadingMore ? 'Loading older pull requests…' : 'Load older pull requests'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

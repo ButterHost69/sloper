@@ -1,5 +1,6 @@
 'use client';
 
+import clsx from 'clsx';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, TriangleAlert } from 'lucide-react';
@@ -9,9 +10,9 @@ import { Skeleton } from '@/components/ui';
 
 const FAILURE_STATUSES = new Set(['failed', 'interrupted']);
 
-const STATUS_COLORS: Record<string, string> = {
-  failed: '#fda4af', // soft red
-  interrupted: '#fbbf24', // amber
+const STATUS_CLASSES: Record<string, string> = {
+  failed: 'text-danger',
+  interrupted: 'text-warn',
 };
 
 /**
@@ -35,9 +36,9 @@ export function FailuresPanel({
   const failures = (runs ?? []).filter((r) => FAILURE_STATUSES.has(r.status)).slice(0, 6);
 
   const counters = [
-    { label: 'Failed issues', value: failedIssues, color: STATUS_COLORS.failed },
-    { label: 'Failed runs', value: failedRuns, color: STATUS_COLORS.failed },
-    { label: 'Interrupted', value: interrupted, color: STATUS_COLORS.interrupted },
+    { label: 'Failed issues', value: failedIssues, className: 'text-danger' },
+    { label: 'Failed runs', value: failedRuns, className: 'text-danger' },
+    { label: 'Interrupted', value: interrupted, className: 'text-warn' },
   ];
 
   return (
@@ -46,7 +47,7 @@ export function FailuresPanel({
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-dim">
           <TriangleAlert size={13} className="text-danger" /> Failures
         </h3>
-        <Link href="/runs?status=failed" className="text-xs text-accent hover:underline">
+        <Link href="/runs?status=attention" className="text-xs text-accent hover:underline">
           View all →
         </Link>
       </header>
@@ -62,10 +63,7 @@ export function FailuresPanel({
           <div className="grid grid-cols-3 divide-x divide-danger/10 border-b border-danger/10">
             {counters.map((c) => (
               <div key={c.label} className="px-4 py-3">
-                <p
-                  className="text-2xl font-semibold tabular-nums"
-                  style={{ color: c.color }}
-                >
+                <p className={clsx('text-2xl font-semibold tabular-nums', c.className)}>
                   {c.value}
                 </p>
                 <p className="mt-0.5 text-[0.65rem] font-medium uppercase tracking-wider text-ink-faint">
@@ -83,7 +81,7 @@ export function FailuresPanel({
           ) : (
             <ul className="divide-y divide-edge/60">
               {failures.map((r) => {
-                const color = STATUS_COLORS[r.status] ?? '#94a3b8';
+                const statusClass = STATUS_CLASSES[r.status] ?? 'text-ink-dim';
                 return (
                   <li key={r.id}>
                     <button
@@ -97,8 +95,7 @@ export function FailuresPanel({
                         stage: {r.stage}
                       </span>
                       <span
-                        className="min-w-0 flex-1 truncate text-xs"
-                        style={{ color }}
+                        className={clsx('min-w-0 flex-1 truncate text-xs', statusClass)}
                       >
                         {r.error_message || `run #${r.id}`}
                       </span>

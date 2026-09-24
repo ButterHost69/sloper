@@ -80,9 +80,9 @@ GET /api/issues/{n}            detail + spec + comments + runs + events + PR
 GET /api/issues/{n}/comments   comments
 GET /api/issues/{n}/runs       pipeline runs
 GET /api/issues/{n}/events     event log for the issue
-GET /api/pulls                 cached pull requests
-GET /api/runs                  all runs
-GET /api/events                audit log
+GET /api/pulls                 cached pull requests (?limit, ?offset, ?before_number)
+GET /api/runs                  run history (?limit, ?offset, ?before_id)
+GET /api/events                audit log (?limit, ?offset, ?before_id)
 GET /api/metrics/activity      activity buckets for charts (?hours=24)
 ```
 

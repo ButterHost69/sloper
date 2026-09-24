@@ -14,11 +14,13 @@ export interface DataState<T> {
 
 /**
  * Fetches from the active sloper instance, re-polling every `intervalMs`.
- * Falls back to the previous data during re-fetch to avoid UI flicker.
+ * Same-instance refreshes keep the previous snapshot to avoid UI flicker;
+ * changing instances clears the old snapshot immediately. Request IDs prevent
+ * late responses from overwriting newer data.
  *
  * The fetcher is kept in a ref so its (typically inline) identity does not
- * retrigger the polling effects — only a change of instance URL does. Pass
- * extra values in `deps` (e.g. search/filter state) to force a reload when
+ * retrigger the polling effects — only a change in URL or explicit deps does.
+ * Pass extra values in `deps` (e.g. search/filter state) to force a reload when
  * they change.
  */
 export function useInstanceData<T>(
@@ -33,7 +35,8 @@ export function useInstanceData<T>(
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const baseRef = useRef<string | null>(null);
+  const requestIdRef = useRef(0);
+  const dataUrlRef = useRef<string | null>(null);
   const fetcherRef = useRef(fetcher);
 
   // Always point at the latest fetcher without re-running effects.
@@ -45,27 +48,35 @@ export function useInstanceData<T>(
 
   const load = useCallback(
     async (isRefresh: boolean) => {
+      const requestId = ++requestIdRef.current;
       if (!url) {
+        dataUrlRef.current = null;
         setData(null);
+        setError(null);
         setLoading(false);
+        setRefreshing(false);
         return;
+      }
+      if (dataUrlRef.current !== url) {
+        dataUrlRef.current = url;
+        setData(null);
+        setError(null);
       }
       if (!isRefresh) setLoading(true);
       else setRefreshing(true);
       try {
         const result = await fetcherRef.current(url);
+        if (requestId !== requestIdRef.current) return;
         setData(result);
         setError(null);
-        baseRef.current = url;
       } catch (err) {
+        if (requestId !== requestIdRef.current) return;
         setError(err instanceof ApiError ? err : (err as Error));
-        if (baseRef.current !== url) {
-          // instance switched — drop stale data
-          setData(null);
-        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

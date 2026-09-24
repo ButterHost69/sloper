@@ -7,6 +7,7 @@ import type { Health } from '@/lib/types';
 
 interface HealthContextValue {
   health: Health | null;
+  error: Error | null;
   refresh: () => void;
   refreshing: boolean;
 }
@@ -18,11 +19,11 @@ const HealthContext = createContext<HealthContextValue | null>(null);
  * instance is not probed twice per cycle.
  */
 export function HealthProvider({ children }: { children: ReactNode }) {
-  const { data, refresh, refreshing } = useInstanceData((base) => api.health(base), 15000);
+  const { data, error, refresh, refreshing } = useInstanceData((base) => api.health(base), 15000);
 
   const value = useMemo(
-    () => ({ health: data, refresh, refreshing }),
-    [data, refresh, refreshing],
+    () => ({ health: data, error, refresh, refreshing }),
+    [data, error, refresh, refreshing],
   );
 
   return <HealthContext.Provider value={value}>{children}</HealthContext.Provider>;

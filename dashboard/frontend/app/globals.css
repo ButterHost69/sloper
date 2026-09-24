@@ -66,6 +66,18 @@
   --app-grid-line: rgb(15 17 21 / 2.5%);
 }
 
+:root {
+  --badge-ink: var(--badge-raw);
+  --badge-border: color-mix(in srgb, var(--badge-raw) 34%, transparent);
+  --badge-bg: color-mix(in srgb, var(--badge-raw) 8%, transparent);
+}
+
+:root[data-theme="light"] {
+  --badge-ink: color-mix(in srgb, var(--badge-raw) 45%, var(--color-ink));
+  --badge-border: color-mix(in srgb, var(--badge-raw) 42%, transparent);
+  --badge-bg: color-mix(in srgb, var(--badge-raw) 11%, transparent);
+}
+
 html {
   min-width: 320px;
   background: var(--color-base);
@@ -164,6 +176,12 @@ button:not(:disabled),
     white-space: nowrap;
   }
 
+  .badge {
+    color: var(--badge-ink);
+    border-color: var(--badge-border);
+    background: var(--badge-bg);
+  }
+
   .btn {
     display: inline-flex;
     min-height: 2.25rem;
@@ -185,7 +203,7 @@ button:not(:disabled),
   }
 
   .btn:hover:not(:disabled) {
-    border-color: rgb(255 255 255 / 22%);
+    border-color: var(--color-edge-2);
     background: var(--color-panel-3);
   }
 
@@ -244,7 +262,7 @@ button:not(:disabled),
   }
 
   .input:hover {
-    border-color: rgb(255 255 255 / 20%);
+    border-color: var(--color-edge-2);
   }
 
   .input:focus {

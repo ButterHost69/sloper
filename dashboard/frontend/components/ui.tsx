@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
 import { AlertTriangle, CircleAlert, Loader2, RefreshCw } from 'lucide-react';
 
 export function Spinner({ className }: { className?: string }) {
@@ -100,8 +100,8 @@ export function Badge({
 }) {
   return (
     <span
-      className={clsx('chip', className)}
-      style={{ color, borderColor: `${color}55`, background: `${color}16` }}
+      className={clsx('badge chip', className)}
+      style={{ '--badge-raw': color } as CSSProperties}
     >
       {dot && <PulseDot color={color} className="!h-1.5 !w-1.5" />}
       {children}
@@ -167,6 +167,29 @@ export function ErrorState({
       {onRetry && (
         <button className="btn btn-ghost" onClick={onRetry} type="button">
           <RefreshCw size={14} /> Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function StaleDataNotice({
+  error,
+  onRetry,
+  label = 'data',
+}: {
+  error: Error | null;
+  onRetry?: () => void;
+  label?: string;
+}) {
+  if (!error) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-warn/25 bg-warn/[0.06] px-3 py-2.5 text-xs text-warn" role="alert">
+      <AlertTriangle size={14} className="shrink-0" />
+      <span>Showing the last successful {label} snapshot.</span>
+      {onRetry && (
+        <button type="button" className="btn btn-ghost !min-h-7 !px-2 !py-1 text-[11px]" onClick={onRetry}>
+          <RefreshCw size={12} /> Retry
         </button>
       )}
     </div>

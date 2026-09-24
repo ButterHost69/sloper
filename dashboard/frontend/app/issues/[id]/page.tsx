@@ -12,9 +12,10 @@ import {
   User,
 } from 'lucide-react';
 import { useInstanceData } from '@/hooks/use-instance-data';
+import { useInstances } from '@/components/instance-context';
 import { api } from '@/lib/api';
 import { formatTime, timeAgo, truncate } from '@/lib/format';
-import { ErrorState, Panel, Skeleton } from '@/components/ui';
+import { EmptyState, ErrorState, Panel, Skeleton } from '@/components/ui';
 import { LabelChips, ReviewStateBadge, StageBadge } from '@/components/badges';
 import { FailedMarker, PipelineDAG } from '@/components/pipeline-dag';
 import { RunsView } from '@/components/runs-view';
@@ -74,6 +75,7 @@ function SpecPanel({ spec }: { spec: Spec | null }) {
 export default function IssueDetailPage() {
   const params = useParams<{ id: string }>();
   const number = Number(params.id);
+  const { active } = useInstances();
   const { data, error, refresh } = useInstanceData(
     (base) => api.issueDetail(base, number),
     10000,
@@ -85,7 +87,19 @@ export default function IssueDetailPage() {
         <Link href="/issues" className="flex items-center gap-1.5 text-xs text-ink-dim hover:text-ink">
           <ArrowLeft size={14} /> Back to issues
         </Link>
-        {error ? (
+        {!active ? (
+          <Panel>
+            <EmptyState
+              title="Connect an instance to inspect this issue"
+              hint="Issue details, cached specs, and agent runs come from the read-only Sloper API."
+              action={
+                <Link href="/instances" className="btn btn-primary mt-1">
+                  Configure an instance
+                </Link>
+              }
+            />
+          </Panel>
+        ) : error ? (
           <Panel>
             <ErrorState error={error} onRetry={refresh} />
           </Panel>

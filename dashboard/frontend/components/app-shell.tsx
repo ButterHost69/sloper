@@ -31,6 +31,22 @@ import { safeHost } from '@/lib/instances';
 
 type Theme = 'dark' | 'light';
 
+function readStorage(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage can be unavailable in partitioned or privacy-restricted contexts.
+  }
+}
+
 const NAV_GROUPS: Array<{
   label: string;
   items: Array<{
@@ -79,17 +95,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const meta = pageMeta(pathname);
   const { instances, active, setActive } = useInstances();
-  const { health, refresh, refreshing } = useHealth();
+  const { health, error: healthError, refresh, refreshing } = useHealth();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
   const [theme, setTheme] = useState<Theme>('dark');
   const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileCloseRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
 
-  const connected = health?.status === 'ok';
+  const connected = health?.status === 'ok' && !healthError;
+  const rail = isDesktop && collapsed;
 
   useEffect(() => {
-    const stored = localStorage.getItem('sloper-theme');
+    const stored = readStorage('sloper-theme');
     const initial: Theme =
       stored === 'light' || stored === 'dark'
         ? stored
@@ -101,7 +122,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setCollapsed(localStorage.getItem('sloper-sidebar-collapsed') === 'true');
+    setCollapsed(readStorage('sloper-sidebar-collapsed') === 'true');
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const update = () => {
+      setIsDesktop(media.matches);
+      setMobileOpen(false);
+    };
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
   }, []);
 
   useEffect(() => {
@@ -109,26 +141,67 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const close = (event: PointerEvent) => {
       if (!pickerRef.current?.contains(event.target as Node)) setPickerOpen(false);
     };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPickerOpen(false);
+    };
     window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
+    window.addEventListener('keydown', escape);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', escape);
+      pickerButtonRef.current?.focus();
+    };
   }, [pickerOpen]);
 
   useEffect(() => {
+    if (!mobileOpen) return;
+    mobileCloseRef.current?.focus();
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    window.addEventListener('keydown', escape);
+    return () => {
+      window.removeEventListener('keydown', escape);
+      if (!isDesktop) mobileMenuButtonRef.current?.focus();
+    };
+  }, [isDesktop, mobileOpen]);
+
+  useEffect(() => {
     setMobileOpen(false);
+    setPickerOpen(false);
   }, [pathname]);
 
   const toggleTheme = () => {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
-    localStorage.setItem('sloper-theme', next);
+    writeStorage('sloper-theme', next);
     document.documentElement.dataset.theme = next;
   };
 
   const toggleSidebar = () => {
     setCollapsed((value) => {
-      localStorage.setItem('sloper-sidebar-collapsed', String(!value));
+      writeStorage('sloper-sidebar-collapsed', String(!value));
       return !value;
     });
+  };
+
+  const handleDrawerKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (isDesktop || !mobileOpen || event.key !== 'Tab') return;
+    const focusable = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((element) => element.offsetParent !== null);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   return (
@@ -137,23 +210,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <button
           className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden"
           aria-label="Close navigation"
+          tabIndex={-1}
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       <aside
+        aria-hidden={!isDesktop && !mobileOpen ? true : undefined}
+        id="primary-navigation"
+        aria-label="Primary navigation"
+        inert={!isDesktop && !mobileOpen}
+        onKeyDown={handleDrawerKeyDown}
         className={clsx(
           'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-edge bg-panel/95 backdrop-blur-xl transition-[width,transform] duration-200 ease-out',
-          collapsed ? 'w-[72px]' : 'w-[252px]',
+          rail ? 'w-20' : 'w-[252px]',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
-        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-edge px-4">
+        <div
+          className={clsx(
+            'flex h-16 shrink-0 items-center border-b border-edge',
+            rail ? 'gap-1 px-1' : 'gap-2 px-4',
+          )}
+        >
           <Link
             href="/"
             className={clsx(
               'flex min-w-0 items-center gap-2.5 rounded-lg text-ink',
-              collapsed ? 'mx-auto' : 'mr-auto',
+              rail ? 'mx-auto' : 'mr-auto',
             )}
             aria-label="Sloper home"
           >
@@ -161,7 +245,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Workflow size={17} strokeWidth={2.25} />
               <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-panel bg-emerald" />
             </span>
-            {!collapsed && (
+            {!rail && (
               <span className="min-w-0">
                 <span className="block text-[15px] font-semibold leading-4 tracking-[-0.01em]">sloper</span>
                 <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-ink-faint">
@@ -173,12 +257,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             className="btn btn-ghost hidden !h-8 !min-h-8 !w-8 !p-0 lg:inline-flex"
             onClick={toggleSidebar}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={rail ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
+            {rail ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
           </button>
           <button
+            ref={mobileCloseRef}
             className="btn btn-ghost !h-8 !min-h-8 !w-8 !p-0 lg:hidden"
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation"
@@ -187,16 +272,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {!collapsed && (
+        {!rail && (
           <div className="px-3 pt-3" ref={pickerRef}>
             <button
+              ref={pickerButtonRef}
               onClick={() => setPickerOpen((value) => !value)}
               className={clsx(
                 'flex w-full items-center gap-2.5 rounded-xl border border-edge bg-panel-2 px-3 py-2.5 text-left transition hover:border-edge-2',
                 pickerOpen && 'border-accent-dim/60 bg-accent/[0.06]',
               )}
               aria-expanded={pickerOpen}
-              aria-haspopup="listbox"
+              aria-controls="instance-picker-menu"
             >
               <span
                 className={clsx(
@@ -216,7 +302,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
 
             {pickerOpen && (
-              <div className="absolute left-3 right-3 top-[70px] z-50 overflow-hidden rounded-xl border border-edge-2 bg-panel p-1.5 shadow-2xl">
+              <div
+                id="instance-picker-menu"
+                aria-label="Choose an instance"
+                className="absolute left-3 right-3 top-[70px] z-50 overflow-hidden rounded-xl border border-edge-2 bg-panel p-1.5 shadow-2xl"
+              >
                 {instances.length === 0 && (
                   <p className="px-3 py-3 text-xs leading-5 text-ink-faint">
                     No instances configured yet.
@@ -233,8 +323,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition hover:bg-panel-2',
                       instance.id === active?.id && 'bg-panel-2',
                     )}
-                    role="option"
-                    aria-selected={instance.id === active?.id}
+                    aria-pressed={instance.id === active?.id}
                   >
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
                     <span className="min-w-0 flex-1">
@@ -256,7 +345,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        {collapsed && (
+        {rail && (
           <div className="flex justify-center px-3 pt-3">
             <Link
               href="/instances"
@@ -277,7 +366,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-label="Primary navigation">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-5 last:mb-0">
-              {!collapsed && (
+              {!rail && (
                 <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.13em] text-ink-faint">
                   {group.label}
                 </p>
@@ -292,13 +381,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       onClick={() => setMobileOpen(false)}
                       className={clsx(
                         'group relative flex h-9 items-center rounded-lg text-[13px] font-medium transition',
-                        collapsed ? 'justify-center px-0' : 'gap-2.5 px-3',
+                        rail ? 'justify-center px-0' : 'gap-2.5 px-3',
                         activePage
                           ? 'bg-accent/10 text-ink'
                           : 'text-ink-dim hover:bg-panel-2 hover:text-ink',
                       )}
                       aria-current={activePage ? 'page' : undefined}
-                      title={collapsed ? label : undefined}
+                      aria-label={rail ? label : undefined}
+                      title={rail ? label : undefined}
                     >
                       {activePage && (
                         <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-accent" />
@@ -310,8 +400,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           activePage ? 'text-accent' : 'text-ink-faint group-hover:text-ink-dim',
                         )}
                       />
-                      {!collapsed && <span className="truncate">{label}</span>}
-                      {!collapsed && planned && (
+                      {!rail && <span className="truncate">{label}</span>}
+                      {!rail && planned && (
                         <span className="ml-auto rounded-full border border-edge-2 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-ink-faint">
                           Preview
                         </span>
@@ -325,7 +415,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="shrink-0 border-t border-edge p-3">
-          {collapsed ? (
+          {rail ? (
             <Link
               href="/instances"
               className="flex h-9 items-center justify-center rounded-lg text-ink-faint transition hover:bg-panel-2 hover:text-ink"
@@ -367,14 +457,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div
         className={clsx(
           'min-w-0 transition-[margin] duration-200 ease-out',
-          collapsed ? 'lg:ml-[72px]' : 'lg:ml-[252px]',
+          rail ? 'lg:ml-20' : 'lg:ml-[252px]',
         )}
       >
-        <header className="sticky top-0 z-30 flex h-16 items-center border-b border-edge bg-base/88 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header
+          inert={!isDesktop && mobileOpen}
+          className="sticky top-0 z-30 flex h-16 items-center border-b border-edge bg-base/88 px-4 backdrop-blur-xl sm:px-6 lg:px-8"
+        >
           <button
+            ref={mobileMenuButtonRef}
             className="btn btn-ghost mr-2 !h-9 !min-h-9 !w-9 !p-0 lg:hidden"
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
+            aria-expanded={mobileOpen}
+            aria-controls="primary-navigation"
           >
             <Menu size={18} />
           </button>
@@ -420,7 +516,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+        <main inert={!isDesktop && mobileOpen} className="px-4 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
           <div className="mx-auto max-w-[1480px] page-enter">{children}</div>
         </main>
       </div>

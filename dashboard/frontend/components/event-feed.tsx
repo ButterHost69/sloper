@@ -71,7 +71,7 @@ export function EventRow({ ev }: { ev: EventRecord }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate font-mono text-[0.7rem] font-medium" style={{ color }}>
+          <span className="truncate font-mono text-[0.7rem] font-medium text-ink-dim">
             {ev.event_type}
           </span>
           {ev.stage && (

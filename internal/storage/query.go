@@ -188,16 +188,22 @@ func (r *Repositories) ListCommentsByIssue(ctx context.Context, issueNumber int6
 	return out, rows.Err()
 }
 
-func (r *Repositories) ListPRs(ctx context.Context, limit int) ([]PRRecord, error) {
+func (r *Repositories) ListPRs(ctx context.Context, limit, offset int, beforeNumber ...int64) ([]PRRecord, error) {
 	if limit <= 0 {
 		limit = 500
 	}
-	rows, err := r.db.QueryContext(ctx, `
+	query := `
 		SELECT number, issue_number, title, head_sha, base_sha, state, url,
 		       updated_at, COALESCE(merged_at, ''), review_state, COALESCE(last_review_at, '')
-		FROM pull_requests
-		ORDER BY number DESC
-		LIMIT ?`, limit)
+		FROM pull_requests`
+	args := []any{}
+	if len(beforeNumber) > 0 && beforeNumber[0] > 0 {
+		query += ` WHERE number < ?`
+		args = append(args, beforeNumber[0])
+	}
+	query += ` ORDER BY number DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list prs: %w", err)
 	}
@@ -240,15 +246,19 @@ func (r *Repositories) CountPRsByState(ctx context.Context) (map[string]int, err
 	return out, rows.Err()
 }
 
-func (r *Repositories) ListRuns(ctx context.Context, limit, offset int) ([]RunRecord, error) {
+func (r *Repositories) ListRuns(ctx context.Context, limit, offset int, beforeID ...int64) ([]RunRecord, error) {
 	if limit <= 0 {
 		limit = 500
 	}
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT `+runColumns+`
-		FROM runs
-		ORDER BY id DESC
-		LIMIT ? OFFSET ?`, limit, offset)
+	query := `SELECT ` + runColumns + ` FROM runs`
+	args := []any{}
+	if len(beforeID) > 0 && beforeID[0] > 0 {
+		query += ` WHERE id < ?`
+		args = append(args, beforeID[0])
+	}
+	query += ` ORDER BY id DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list runs: %w", err)
 	}
@@ -327,16 +337,22 @@ func (r *Repositories) CountEvents(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-func (r *Repositories) ListEvents(ctx context.Context, limit, offset int) ([]EventRecordFull, error) {
+func (r *Repositories) ListEvents(ctx context.Context, limit, offset int, beforeID ...int64) ([]EventRecordFull, error) {
 	if limit <= 0 {
 		limit = 500
 	}
-	rows, err := r.db.QueryContext(ctx, `
+	query := `
 		SELECT id, COALESCE(issue_number, 0), COALESCE(pr_number, 0), event_type,
 		       COALESCE(stage, ''), message, context_json, created_at
-		FROM event_logs
-		ORDER BY id DESC
-		LIMIT ? OFFSET ?`, limit, offset)
+		FROM event_logs`
+	args := []any{}
+	if len(beforeID) > 0 && beforeID[0] > 0 {
+		query += ` WHERE id < ?`
+		args = append(args, beforeID[0])
+	}
+	query += ` ORDER BY id DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list events: %w", err)
 	}

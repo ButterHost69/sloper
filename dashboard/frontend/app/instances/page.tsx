@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ExternalLink, KeyRound, Pencil, Plus, Server, Trash2, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { useInstances } from '@/components/instance-context';
@@ -20,6 +20,7 @@ interface Probe {
 }
 
 function useProbe(url: string | undefined, intervalMs = 20000) {
+  const requestIdRef = useRef(0);
   const [probe, setProbe] = useState<Probe>({
     health: null,
     repo: null,
@@ -29,6 +30,7 @@ function useProbe(url: string | undefined, intervalMs = 20000) {
   });
 
   const check = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     if (!url) {
       setProbe((p) => ({ ...p, loading: false }));
       return;
@@ -36,8 +38,10 @@ function useProbe(url: string | undefined, intervalMs = 20000) {
     setProbe((p) => ({ ...p, loading: true }));
     try {
       const [health, repo] = await Promise.all([api.health(url), api.repo(url)]);
+      if (requestId !== requestIdRef.current) return;
       setProbe({ health, repo, loading: false, error: null, lastChecked: Date.now() });
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setProbe({
         health: null,
         repo: null,
@@ -84,8 +88,8 @@ function InstanceCard({
         isActive && 'border-accent/40 shadow-[0_0_0_1px_rgba(52,211,153,0.25),0_8px_30px_rgba(0,0,0,0.35)]',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div
             className={clsx(
               'flex h-10 w-10 items-center justify-center rounded-lg border',
@@ -100,23 +104,40 @@ function InstanceCard({
               <XCircle size={17} />
             )}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="font-semibold text-ink">{name}</p>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate font-semibold text-ink">{name}</p>
               {isActive && (
                 <span className="chip !text-[0.58rem] !text-accent !border-accent/40 !bg-accent/10">
                   active
                 </span>
               )}
             </div>
-            <p className="mt-0.5 font-mono text-xs text-ink-faint">{url}</p>
+            <p className="mt-0.5 truncate font-mono text-xs text-ink-faint">{url}</p>
           </div>
         </div>
-        <div className="flex gap-1">
-          <button className="btn btn-ghost !p-2" onClick={onEdit} title="Edit">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {!isActive && (
+            <button type="button" className="btn !min-h-8 !px-2.5 !py-1.5 text-[11px]" onClick={onActivate}>
+              Use instance
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-ghost !p-2"
+            onClick={onEdit}
+            title="Edit"
+            aria-label={`Edit ${name}`}
+          >
             <Pencil size={14} />
           </button>
-          <button className="btn btn-ghost !p-2" onClick={onRemove} title="Remove">
+          <button
+            type="button"
+            className="btn btn-ghost !p-2"
+            onClick={onRemove}
+            title="Remove"
+            aria-label={`Remove ${name}`}
+          >
             <Trash2 size={14} className="text-danger" />
           </button>
         </div>
@@ -200,11 +221,11 @@ export default function InstancesPage() {
       setFormError('URL must be a valid http:// or https:// address.');
       return;
     }
-    const cleanToken = token.trim() || undefined;
+    const cleanToken = token.trim() || null;
     if (editing) {
       updateInstance(editing, { name: name.trim(), url: normalized, token: cleanToken });
     } else {
-      addInstance(name.trim(), normalized, cleanToken);
+      addInstance(name.trim(), normalized, cleanToken || undefined);
     }
     reset();
   };
@@ -242,8 +263,9 @@ export default function InstancesPage() {
           <form onSubmit={submit} className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
               <div>
-                <label className="label">Name</label>
+                <label className="label" htmlFor="instance-name">Name</label>
                 <input
+                  id="instance-name"
                   className="input"
                   placeholder="e.g. Staging"
                   value={name}
@@ -252,8 +274,9 @@ export default function InstancesPage() {
                 />
               </div>
               <div>
-                <label className="label">Base URL</label>
+                <label className="label" htmlFor="instance-url">Base URL</label>
                 <input
+                  id="instance-url"
                   className="input mono"
                   placeholder="http://localhost:8080"
                   value={url}
@@ -263,10 +286,11 @@ export default function InstancesPage() {
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className="label flex items-center gap-1.5">
+                <label className="label flex items-center gap-1.5" htmlFor="instance-token">
                   <KeyRound size={12} className="text-ink-faint" /> Bearer token (optional)
                 </label>
                 <input
+                  id="instance-token"
                   type="password"
                   className="input mono"
                   placeholder="SLOPER_WEB_TOKEN if the server requires one"

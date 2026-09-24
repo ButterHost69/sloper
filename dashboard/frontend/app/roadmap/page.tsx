@@ -43,7 +43,7 @@ const liveFeatures = [
   },
   {
     title: 'Events',
-    description: 'Inspect the read-only audit stream and hourly activity timeline for every coordinator event.',
+    description: 'Inspect the read-only audit stream and hourly activity timeline for the selected range.',
     href: '/events',
     icon: ScrollText,
     color: '#7aaaff',
@@ -271,8 +271,7 @@ export default function RoadmapPage() {
             <Badge color="#a78bfa">Planned</Badge>
           </div>
 
-          <fieldset disabled className="px-4 py-5 sm:px-6 sm:py-6">
-            <legend className="sr-only">Planned orchestration pipeline preview</legend>
+          <div aria-label="Planned orchestration pipeline preview" className="px-4 py-5 sm:px-6 sm:py-6">
             <ol className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               {pipelineStages.map(({ label, icon: Icon, state }, index) => (
                 <li key={label} className="relative">
@@ -315,7 +314,7 @@ export default function RoadmapPage() {
                 <LockKeyhole size={11} aria-hidden="true" /> Preview disabled
               </span>
             </div>
-          </fieldset>
+          </div>
         </Panel>
       </section>
     </div>

@@ -35,6 +35,7 @@ import {
   Panel,
   PulseDot,
   Skeleton,
+  StaleDataNotice,
   StatCard,
 } from '@/components/ui';
 import { PipelineFunnel } from '@/components/pipeline-funnel';
@@ -104,25 +105,36 @@ function EmptyConnection() {
 
 export default function OverviewPage() {
   const { active } = useInstances();
-  const { health } = useHealth();
+  const { health, error: healthError } = useHealth();
   const router = useRouter();
 
   const { data: summary, loading: summaryLoading, error, refresh, refreshing } = useInstanceData(
     (base) => api.summary(base),
     10000,
   );
-  const { data: events } = useInstanceData((base) => api.events(base, 50), 10000);
-  const { data: runs } = useInstanceData((base) => api.runs(base, 300), 15000);
-  const { data: repo } = useInstanceData((base) => api.repo(base), 60000);
+  const {
+    data: events,
+    refresh: refreshEvents,
+    refreshing: eventsRefreshing,
+  } = useInstanceData((base) => api.events(base, 5000), 10000);
+  const {
+    data: runs,
+    refresh: refreshRuns,
+    refreshing: runsRefreshing,
+  } = useInstanceData((base) => api.runs(base, 300), 15000);
+  const {
+    data: repo,
+    refresh: refreshRepo,
+    refreshing: repoRefreshing,
+  } = useInstanceData((base) => api.repo(base), 60000);
 
   const lastTick = useMemo(() => {
     const list = events?.events ?? [];
-    let started: EventRecord | undefined;
-    let completed: EventRecord | undefined;
-    for (const event of list) {
-      if (event.event_type === 'tick.started' && !started) started = event;
-      if (event.event_type === 'tick.completed' && !completed) completed = event;
-    }
+    const startedIndex = list.findIndex((event) => event.event_type === 'tick.started');
+    const started = startedIndex >= 0 ? list[startedIndex] : undefined;
+    const completed = startedIndex >= 0
+      ? list.slice(0, startedIndex).find((event) => event.event_type === 'tick.completed')
+      : undefined;
     let durationS: number | null = null;
     if (started && completed) {
       const start = new Date(started.created_at).getTime();
@@ -137,7 +149,16 @@ export default function OverviewPage() {
   const runList = runs?.runs ?? [];
   const recentRuns = runList.slice(0, 7);
   const tickCount = summary?.events?.by_type?.['tick.completed'] ?? 0;
-  const connected = health?.status === 'ok';
+  const connected = health?.status === 'ok' && !healthError;
+  const refreshingAll =
+    refreshing || eventsRefreshing || runsRefreshing || repoRefreshing || summaryLoading;
+
+  const refreshAll = () => {
+    refresh();
+    refreshEvents();
+    refreshRuns();
+    refreshRepo();
+  };
 
   return (
     <div className="space-y-6">
@@ -156,11 +177,11 @@ export default function OverviewPage() {
         <button
           type="button"
           className="btn self-start sm:self-auto"
-          onClick={refresh}
-          disabled={!active || refreshing || summaryLoading}
+          onClick={refreshAll}
+          disabled={!active || refreshingAll}
         >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          Refresh data
+          <RefreshCw size={14} className={refreshingAll ? 'animate-spin' : ''} />
+          Refresh dashboard
         </button>
       </section>
 
@@ -172,6 +193,7 @@ export default function OverviewPage() {
         </Panel>
       ) : (
         <>
+          {error && summary && <StaleDataNotice error={error} onRetry={refresh} label="dashboard" />}
           <section className="panel surface-grid relative overflow-hidden p-4 sm:p-5">
             <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
             <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
