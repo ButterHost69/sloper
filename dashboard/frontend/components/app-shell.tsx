@@ -100,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
-  const [theme, setTheme] = useState<Theme>('dark');
+  const [theme, setTheme] = useState<Theme>('light');
   const pickerRef = useRef<HTMLDivElement>(null);
   const pickerButtonRef = useRef<HTMLButtonElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
@@ -111,12 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const stored = readStorage('sloper-theme');
-    const initial: Theme =
-      stored === 'light' || stored === 'dark'
-        ? stored
-        : window.matchMedia('(prefers-color-scheme: light)').matches
-          ? 'light'
-          : 'dark';
+    const initial: Theme = stored === 'light' || stored === 'dark' ? stored : 'light';
     setTheme(initial);
     document.documentElement.dataset.theme = initial;
   }, []);
@@ -224,7 +219,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         inert={!isDesktop && !mobileOpen}
         onKeyDown={handleDrawerKeyDown}
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-edge bg-panel/95 backdrop-blur-xl transition-[width,transform] duration-200 ease-out',
+          'glass-chrome fixed inset-y-0 left-0 z-50 flex flex-col border-r border-edge bg-panel/75 backdrop-blur-2xl transition-[width,transform] duration-200 ease-out',
           rail ? 'w-20' : 'w-[252px]',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
@@ -307,7 +302,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div
                 id="instance-picker-menu"
                 aria-label="Choose an instance"
-                className="absolute left-3 right-3 top-[70px] z-50 overflow-hidden rounded-xl border border-edge-2 bg-panel p-1.5 shadow-2xl"
+                className="glass-chrome absolute left-3 right-3 top-[70px] z-50 overflow-hidden rounded-2xl border border-edge-2 bg-panel/90 p-1.5 shadow-2xl"
               >
                 {instances.length === 0 && (
                   <p className="px-3 py-3 text-xs leading-5 text-ink-faint">
@@ -464,7 +459,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <header
           inert={!isDesktop && mobileOpen}
-          className="sticky top-0 z-30 flex h-16 items-center border-b border-edge bg-base/88 px-4 backdrop-blur-xl sm:px-6 lg:px-8"
+          className="glass-chrome sticky top-0 z-30 flex h-16 items-center border-b border-edge bg-panel/65 px-4 backdrop-blur-2xl sm:px-6 lg:px-8"
         >
           <button
             ref={mobileMenuButtonRef}

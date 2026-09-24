@@ -116,7 +116,7 @@ const pipelineStages = [
 export default function RoadmapPage() {
   return (
     <div className="space-y-8">
-      <header className="relative overflow-hidden rounded-2xl border border-edge bg-panel px-5 py-7 sm:px-7 sm:py-9">
+      <header className="glass-hero panel relative overflow-hidden px-5 py-7 sm:px-7 sm:py-9">
         <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent/[0.08] blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 right-1/3 h-28 w-28 rounded-full bg-violet/[0.07] blur-3xl" />
         <div className="relative max-w-3xl">

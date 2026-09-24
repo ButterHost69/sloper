@@ -25,6 +25,10 @@ sloper instance's read-only JSON API, which is served by the small Go server in
 - Each instance must run `sloper-web` (the API server) with its own database.
 - Everything is read-only: the console observes, it never mutates GitHub or the DB.
 
+## Visual language
+
+The console uses a restrained Apple-like glass system: pale neutral canvases, one blue action accent, translucent layered surfaces, luminous hairlines, soft elevation, capsule controls, and strong ease-out motion. It follows the token-first and accessibility guidance in the OpenDesign [glassmorphism design system](https://github.com/nexu-io/open-design/tree/main/design-systems/glassmorphism) and the precision/contrast rules in its [Apple design system](https://github.com/nexu-io/open-design/tree/main/design-systems/apple). Dark mode keeps the same semantic token roles rather than introducing a second visual language.
+
 ## Views
 
 | Route          | What it shows                                                        |

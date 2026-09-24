@@ -63,7 +63,7 @@ const PLANNED = [
 
 function EmptyConnection() {
   return (
-    <Panel className="surface-grid overflow-hidden" bodyClassName="p-0">
+    <Panel className="glass-hero surface-grid overflow-hidden" bodyClassName="p-0">
       <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
         <div>
           <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 text-accent">
@@ -201,7 +201,7 @@ export default function OverviewPage() {
           {secondaryError && (events || runs || repo) && (
             <StaleDataNotice error={secondaryError} onRetry={refreshAll} label="dashboard data" />
           )}
-          <section className="panel surface-grid relative overflow-hidden p-4 sm:p-5">
+          <section className="panel glass-hero surface-grid relative overflow-hidden p-4 sm:p-5">
             <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
             <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">

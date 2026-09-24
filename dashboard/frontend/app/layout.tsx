@@ -14,19 +14,17 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#151517' },
+    { media: '(prefers-color-scheme: light)', color: '#eef6ff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0c1020' },
   ],
-  colorScheme: 'dark light',
+  colorScheme: 'light dark',
 };
 
 const themeScript = `
 (function () {
   try {
     var saved = localStorage.getItem('sloper-theme');
-    var theme = saved === 'light' || saved === 'dark'
-      ? saved
-      : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    var theme = saved === 'light' || saved === 'dark' ? saved : 'light';
     document.documentElement.dataset.theme = theme;
   } catch (_) {}
 })();
@@ -34,7 +32,7 @@ const themeScript = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
+    <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
