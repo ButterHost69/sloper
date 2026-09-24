@@ -10,6 +10,7 @@ import { timeAgo, formatTime } from '@/lib/format';
 import { STAGES, stageMeta } from '@/lib/stages';
 import type { Issue } from '@/lib/types';
 import { EmptyState, ErrorState, Panel, Skeleton } from '@/components/ui';
+import { PageHeader } from '@/components/page-header';
 import { LabelChips, StageBadge } from '@/components/badges';
 import clsx from 'clsx';
 
@@ -18,7 +19,7 @@ function IssueRow({ issue }: { issue: Issue }) {
   return (
     <Link
       href={`/issues/${issue.number}`}
-      className="group grid grid-cols-12 items-center gap-3 border-b border-edge/60 px-4 py-3 transition hover:bg-white/[0.03]"
+      className="group grid grid-cols-12 items-center gap-3 border-b border-edge/60 px-4 py-3 transition hover:bg-panel-2/60"
     >
       <div className="col-span-12 flex items-center gap-2 sm:col-span-6">
         <span
@@ -106,23 +107,30 @@ function IssuesPageInner() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Issues</h1>
-          <p className="mt-1 text-xs text-ink-faint">
+      <PageHeader
+        eyebrow="Issues"
+        title="Issues"
+        subtitle={
+          <>
             {totalIssues} total · {shown} shown
-          </p>
-        </div>
-        <div className="relative w-full max-w-xs">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <input
-            className="input !pl-9"
-            placeholder="Search title, #number, author, label…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <div className="relative w-full lg:w-80">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"
+            />
+            <input
+              className="input !pl-9"
+              aria-label="Search issues"
+              placeholder="Search title, #number, author, label…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        }
+      />
 
       {/* Stage filter chips */}
       <div className="flex flex-wrap gap-1.5">

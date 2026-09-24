@@ -5,19 +5,40 @@ import { HealthProvider } from '@/components/health-context';
 import { AppShell } from '@/components/app-shell';
 
 export const metadata: Metadata = {
-  title: 'Sloper Console',
-  description: 'Observability dashboard for sloper agent instances.',
+  title: {
+    default: 'Sloper Console',
+    template: '%s · Sloper',
+  },
+  description: 'Observability and orchestration console for Sloper agent instances.',
 };
 
 export const viewport: Viewport = {
-  themeColor: '#09090b',
-  colorScheme: 'dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#151517' },
+  ],
+  colorScheme: 'dark light',
 };
+
+const themeScript = `
+(function () {
+  try {
+    var saved = localStorage.getItem('sloper-theme');
+    var theme = saved === 'light' || saved === 'dark'
+      ? saved
+      : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    document.documentElement.dataset.theme = theme;
+  } catch (_) {}
+})();
+`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-base text-ink antialiased">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body>
         <InstanceProvider>
           <HealthProvider>
             <AppShell>{children}</AppShell>

@@ -62,7 +62,7 @@ function styleFor(type: string) {
 export function EventRow({ ev }: { ev: EventRecord }) {
   const { color, icon: Icon } = styleFor(ev.event_type);
   return (
-    <div className="group flex items-start gap-3 rounded-lg px-2 py-2 transition hover:bg-white/[0.03]">
+    <div className="group flex items-start gap-3 rounded-lg px-2 py-2 transition hover:bg-panel-2/60">
       <span
         className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border"
         style={{ color, borderColor: `${color}33`, background: `${color}12` }}

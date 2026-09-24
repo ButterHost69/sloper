@@ -41,10 +41,10 @@ export function FailuresPanel({
   ];
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#f87171]/15 bg-[#f87171]/[0.03]">
-      <header className="flex items-center justify-between border-b border-[#f87171]/15 px-4 py-3">
+    <section className="overflow-hidden rounded-xl border border-danger/20 bg-danger/[0.03]">
+      <header className="flex items-center justify-between border-b border-danger/15 px-4 py-3">
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-dim">
-          <TriangleAlert size={13} className="text-[#fda4af]" /> Failures
+          <TriangleAlert size={13} className="text-danger" /> Failures
         </h3>
         <Link href="/runs?status=failed" className="text-xs text-accent hover:underline">
           View all →
@@ -59,7 +59,7 @@ export function FailuresPanel({
       ) : (
         <div>
           {/* Counter strip — deliberately not StatCard style */}
-          <div className="grid grid-cols-3 divide-x divide-[#f87171]/10 border-b border-[#f87171]/10">
+          <div className="grid grid-cols-3 divide-x divide-danger/10 border-b border-danger/10">
             {counters.map((c) => (
               <div key={c.label} className="px-4 py-3">
                 <p
@@ -88,7 +88,7 @@ export function FailuresPanel({
                   <li key={r.id}>
                     <button
                       onClick={() => router.push(`/issues/${r.issue_number}`)}
-                      className="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-white/[0.02]"
+                      className="flex w-full items-center gap-3 px-4 py-2 text-left transition hover:bg-panel-2/60"
                     >
                       <span className="w-12 shrink-0 font-mono text-xs font-semibold text-accent">
                         #{r.issue_number}

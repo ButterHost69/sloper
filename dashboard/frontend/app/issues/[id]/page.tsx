@@ -58,7 +58,7 @@ function SpecPanel({ spec }: { spec: Spec | null }) {
           Implementation plan
         </h4>
         {spec.implementation_plan ? (
-          <div className="prose-dark max-h-72 overflow-auto rounded-lg border border-edge bg-[#0c0c0f] p-3">
+          <div className="prose-dark max-h-72 overflow-auto rounded-lg border border-edge bg-base p-3">
             {spec.implementation_plan
               .split('\n')
               .map((line, i) => <p key={i} className="mb-1.5">{line || '\u00A0'}</p>)}

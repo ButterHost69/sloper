@@ -112,6 +112,11 @@ export interface EventRecord {
   created_at: string;
 }
 
+export interface ActivityBucket {
+  time: string;
+  count: number;
+}
+
 export interface PullRecord {
   number: number;
   issue_number: number;

@@ -1,6 +1,6 @@
 # Sloper Console
 
-A dark-mode observability dashboard for **one or more running sloper instances**,
+A light/dark observability dashboard for **one or more running sloper instances**,
 built with Next.js (App Router) + Tailwind CSS + Recharts.
 
 The console is a pure frontend. It talks directly (from your browser) to each
@@ -29,13 +29,14 @@ sloper instance's read-only JSON API, which is served by the small Go server in
 
 | Route          | What it shows                                                        |
 | -------------- | -------------------------------------------------------------------- |
-| `/`            | Aggregate stats, pipeline funnel, activity chart, live event feed    |
+| `/`            | Aggregate stats, pipeline funnel, failures, runs, and live activity   |
 | `/issues`      | Searchable/filterable issue table, click through to detail           |
 | `/issues/[id]` | Pipeline DAG, spec analysis, runs timeline, comments, event timeline |
-| `/pulls`       | PR board grouped by state with review status                         |
-| `/runs`        | Pipeline execution history with expandable agent output/thinking     |
-| `/events`      | Filterable audit log stream                                          |
+| `/pulls`       | PR board grouped by GitHub state with agent review status             |
+| `/runs`        | Filterable execution history with expandable agent output/thinking    |
+| `/events`      | Hourly activity chart and filterable audit log stream                 |
 | `/instances`   | Manage multiple sloper instances + health probes                     |
+| `/roadmap`     | Clearly labeled previews of planned loops, runners, and extensions    |
 
 ## Running
 

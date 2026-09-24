@@ -9,6 +9,7 @@ import { normalizeUrl } from '@/lib/instances';
 import { timeAgo, formatBytes } from '@/lib/format';
 import type { Health, RepoInfo } from '@/lib/types';
 import { Panel, PulseDot, SectionHeader } from '@/components/ui';
+import { PageHeader } from '@/components/page-header';
 
 interface Probe {
   health: Health | null;
@@ -219,17 +220,22 @@ export default function InstancesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Instances</h1>
-          <p className="mt-1 text-xs text-ink-faint">
-            Point the console at one or more running sloper web servers.
-          </p>
-        </div>
-        <button className="btn btn-primary" onClick={() => { reset(); setShowForm((v) => !v); }}>
-          <Plus size={14} /> {showForm ? 'Close' : 'Add instance'}
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Instances"
+        title="Instances"
+        subtitle="Point the console at one or more running sloper web servers."
+        actions={
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              reset();
+              setShowForm((v) => !v);
+            }}
+          >
+            <Plus size={14} /> {showForm ? 'Close' : 'Add instance'}
+          </button>
+        }
+      />
 
       {showForm && (
         <Panel>
@@ -317,7 +323,7 @@ export default function InstancesPage() {
             Each sloper instance ships a read-only JSON API backed by its own SQLite database. Start it
             wherever sloper is running:
           </p>
-          <pre className="mt-3 overflow-x-auto rounded-lg border border-edge bg-[#0c0c0f] p-4 font-mono text-xs leading-relaxed text-[#c9c9d4]">
+          <pre className="mt-3 overflow-x-auto rounded-lg border border-edge bg-base p-4 font-mono text-xs leading-relaxed text-ink-dim">
 {`# from a machine with access to the sloper database
 SLOPER_DB_PATH=/path/to/sloper.sqlite \\
 SLOPER_WEB_PORT=8080 \\

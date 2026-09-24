@@ -16,7 +16,7 @@ function LogBlock({ title, content }: { title: string; content: string }) {
       <p className="mb-1 flex items-center gap-1.5 text-[0.65rem] font-semibold uppercase tracking-wider text-ink-faint">
         <Terminal size={12} /> {title}
       </p>
-      <pre className="max-h-72 overflow-auto rounded-md border border-edge bg-[#0c0c0f] p-3 font-mono text-[0.72rem] leading-relaxed text-[#c9c9d4] whitespace-pre-wrap">
+      <pre className="max-h-72 overflow-auto rounded-lg border border-edge bg-base p-3 font-mono text-[0.72rem] leading-relaxed whitespace-pre-wrap text-ink-dim">
         {content}
       </pre>
     </div>
@@ -31,12 +31,12 @@ function RunRow({ run, defaultOpen }: { run: RunRecord; defaultOpen: boolean }) 
       className={clsx(
         'border-b border-edge/60 transition',
         failed && 'bg-danger/[0.03]',
-        open && 'bg-white/[0.02]',
+        open && 'bg-panel-2/35',
       )}
     >
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.02]"
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-panel-2/60"
       >
         <ChevronDown
           size={14}

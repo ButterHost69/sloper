@@ -1,11 +1,11 @@
 'use client';
 
 import clsx from 'clsx';
-import type { ReactNode } from 'react';
-import { AlertTriangle, CircleAlert, RefreshCw, Loader2 } from 'lucide-react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { AlertTriangle, CircleAlert, Loader2, RefreshCw } from 'lucide-react';
 
 export function Spinner({ className }: { className?: string }) {
-  return <Loader2 className={clsx('animate-spin', className)} size={16} />;
+  return <Loader2 className={clsx('animate-spin', className)} size={16} aria-hidden="true" />;
 }
 
 export function PulseDot({
@@ -17,8 +17,9 @@ export function PulseDot({
 }) {
   return (
     <span
-      className={clsx('inline-block h-2 w-2 rounded-full', className)}
+      className={clsx('inline-block h-2 w-2 shrink-0 rounded-full', className)}
       style={{ background: color, boxShadow: `0 0 8px ${color}` }}
+      aria-hidden="true"
     />
   );
 }
@@ -28,7 +29,7 @@ export function StatCard({
   value,
   sub,
   icon,
-  accent = '#34d399',
+  accent = '#7aaaff',
   loading,
   onClick,
 }: {
@@ -40,38 +41,50 @@ export function StatCard({
   loading?: boolean;
   onClick?: () => void;
 }) {
-  return (
-    <div
-      className={clsx('panel panel-hover relative overflow-hidden p-4', onClick && 'cursor-pointer')}
-      onClick={onClick}
-    >
+  const content = (
+    <>
       <div
-        className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-[0.12] blur-2xl"
+        className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-[0.09] blur-3xl"
         style={{ background: accent }}
       />
-      <div className="flex items-start justify-between gap-3">
+      <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[0.7rem] font-semibold uppercase tracking-wider text-ink-faint">
-            {label}
-          </p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">{label}</p>
           {loading ? (
-            <div className="skeleton mt-2 h-7 w-20" />
+            <div className="skeleton mt-2.5 h-7 w-20" />
           ) : (
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-ink">{value}</p>
+            <p className="mt-1.5 text-[26px] font-semibold leading-none tracking-[-0.035em] tabular-nums text-ink">
+              {value}
+            </p>
           )}
-          {sub && <div className="mt-1 text-xs text-ink-dim">{sub}</div>}
+          {sub && <div className="mt-2 text-[11px] leading-4 text-ink-dim">{sub}</div>}
         </div>
         {icon && (
           <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-edge-2"
-            style={{ color: accent, background: 'rgba(255,255,255,0.02)' }}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-edge bg-panel-2"
+            style={{ color: accent }}
           >
             {icon}
           </div>
         )}
       </div>
-    </div>
+    </>
   );
+
+  const className = clsx(
+    'panel panel-hover relative min-h-[112px] overflow-hidden p-4 text-left',
+    onClick && 'hover:cursor-pointer',
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" className={className} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 export function Badge({
@@ -88,7 +101,7 @@ export function Badge({
   return (
     <span
       className={clsx('chip', className)}
-      style={{ color, borderColor: `${color}44`, background: `${color}14` }}
+      style={{ color, borderColor: `${color}55`, background: `${color}16` }}
     >
       {dot && <PulseDot color={color} className="!h-1.5 !w-1.5" />}
       {children}
@@ -97,25 +110,30 @@ export function Badge({
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={clsx('skeleton', className)} />;
+  return <div className={clsx('skeleton', className)} aria-hidden="true" />;
 }
 
 export function EmptyState({
   title,
   hint,
   icon,
+  action,
 }: {
   title: string;
   hint?: string;
   icon?: ReactNode;
+  action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-14 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-edge-2 text-ink-faint">
-        {icon ?? <CircleAlert size={20} />}
+    <div className="flex flex-col items-center justify-center gap-3 px-5 py-14 text-center">
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-edge bg-panel-2 text-ink-faint">
+        {icon ?? <CircleAlert size={19} aria-hidden="true" />}
       </div>
-      <p className="text-sm font-medium text-ink-dim">{title}</p>
-      {hint && <p className="max-w-xs text-xs text-ink-faint">{hint}</p>}
+      <div>
+        <p className="text-sm font-medium text-ink">{title}</p>
+        {hint && <p className="mx-auto mt-1.5 max-w-sm text-xs leading-5 text-ink-faint">{hint}</p>}
+      </div>
+      {action}
     </div>
   );
 }
@@ -132,21 +150,22 @@ export function ErrorState({
   return (
     <div
       className={clsx(
-        'flex flex-col items-center justify-center gap-3 text-center',
-        compact ? 'py-8' : 'py-16',
+        'flex flex-col items-center justify-center gap-3 px-5 text-center',
+        compact ? 'py-8' : 'py-14',
       )}
+      role="alert"
     >
-      <div className="flex h-11 w-11 items-center justify-center rounded-full border border-danger/30 bg-danger/10 text-danger">
-        <AlertTriangle size={18} />
+      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-danger/25 bg-danger/10 text-danger">
+        <AlertTriangle size={18} aria-hidden="true" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-ink">Could not reach this sloper instance</p>
-        <p className="mt-1 max-w-md text-xs text-ink-faint">
+        <p className="text-sm font-semibold text-ink">Could not reach this Sloper instance</p>
+        <p className="mx-auto mt-1.5 max-w-md break-words text-xs leading-5 text-ink-faint">
           {error?.message ?? 'Unknown error'}
         </p>
       </div>
       {onRetry && (
-        <button className="btn btn-ghost" onClick={onRetry}>
+        <button className="btn btn-ghost" onClick={onRetry} type="button">
           <RefreshCw size={14} /> Retry
         </button>
       )}
@@ -166,8 +185,8 @@ export function SectionHeader({
   return (
     <div className="mb-3 flex items-end justify-between gap-3">
       <div>
-        <h2 className="text-sm font-semibold text-ink">{title}</h2>
-        {sub && <p className="mt-0.5 text-xs text-ink-faint">{sub}</p>}
+        <h2 className="text-sm font-semibold tracking-[-0.01em] text-ink">{title}</h2>
+        {sub && <p className="mt-1 text-[11px] leading-4 text-ink-faint">{sub}</p>}
       </div>
       {action}
     </div>
@@ -188,16 +207,14 @@ export function Panel({
   bodyClassName?: string;
 }) {
   return (
-    <section className={clsx('panel', className)}>
+    <section className={clsx('panel overflow-hidden', className)}>
       {(title || action) && (
-        <header className="flex items-center justify-between border-b border-edge px-4 py-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-dim">
-            {title}
-          </h3>
+        <header className="flex min-h-12 items-center justify-between gap-3 border-b border-edge px-4 py-3 sm:px-5">
+          <h3 className="text-xs font-semibold tracking-[-0.005em] text-ink-dim">{title}</h3>
           {action}
         </header>
       )}
-      <div className={clsx('p-4', bodyClassName)}>{children}</div>
+      <div className={clsx('p-4 sm:p-5', bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -205,21 +222,42 @@ export function Panel({
 export function ProgressBar({
   value,
   max,
-  color = '#34d399',
+  color = '#7aaaff',
   className,
+  label,
 }: {
   value: number;
   max: number;
   color?: string;
   className?: string;
+  label?: string;
 }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
-    <div className={clsx('h-1.5 w-full overflow-hidden rounded-full bg-edge', className)}>
+    <div
+      className={clsx('h-1.5 w-full overflow-hidden rounded-full bg-edge', className)}
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={max}
+      aria-valuenow={value}
+    >
       <div
         className="h-full rounded-full transition-all duration-500"
         style={{ width: `${pct}%`, background: color }}
       />
     </div>
+  );
+}
+
+export function IconButton({
+  className,
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button type="button" className={clsx('btn btn-ghost !p-2', className)} {...props}>
+      {children}
+    </button>
   );
 }
