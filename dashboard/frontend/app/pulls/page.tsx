@@ -130,7 +130,7 @@ export default function PullsPage() {
     (base) => api.pulls(base, PAGE_SIZE),
     15000,
   );
-  const { data: issuesData, error: issuesError } = useInstanceData(
+  const { data: issuesData, error: issuesError, refresh: refreshIssues } = useInstanceData(
     (base) => api.issues(base, { limit: 5000 }),
     30000,
   );
@@ -258,10 +258,13 @@ export default function PullsPage() {
         ))}
       </div>
 
-      {issuesError && (
-        <p className="text-xs text-warn" role="status">
-          Workflow metadata is unavailable; cards still show GitHub state and pull request details.
-        </p>
+      {issuesError && issuesData && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-warn" role="status">
+          <span>Workflow metadata is from the last successful snapshot.</span>
+          <button type="button" className="btn btn-ghost !min-h-7 !px-2 !py-1 text-[11px]" onClick={refreshIssues}>
+            Retry metadata
+          </button>
+        </div>
       )}
 
       {error && data && <StaleDataNotice error={error} onRetry={refresh} label="pull request" />}

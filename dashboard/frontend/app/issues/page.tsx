@@ -9,7 +9,7 @@ import { api } from '@/lib/api';
 import { timeAgo, formatTime } from '@/lib/format';
 import { STAGES, stageMeta } from '@/lib/stages';
 import type { Issue } from '@/lib/types';
-import { EmptyState, ErrorState, Panel, Skeleton } from '@/components/ui';
+import { EmptyState, ErrorState, Panel, Skeleton, StaleDataNotice } from '@/components/ui';
 import { useInstances } from '@/components/instance-context';
 import { PageHeader } from '@/components/page-header';
 import { LabelChips, StageBadge } from '@/components/badges';
@@ -101,7 +101,10 @@ function IssuesPageInner() {
 
   // Stage counts come from the summary endpoint so chips stay accurate
   // regardless of the active search/filter.
-  const { data: summary } = useInstanceData((base) => api.summary(base), 15000);
+  const { data: summary, error: summaryError, refresh: refreshSummary } = useInstanceData(
+    (base) => api.summary(base),
+    15000,
+  );
   const totalIssues = summary?.issues?.total ?? 0;
   const counts = useMemo(() => summary?.issues?.by_stage ?? {}, [summary]);
 
@@ -160,6 +163,11 @@ function IssuesPageInner() {
           </button>
         ))}
       </div>
+
+      {error && data && <StaleDataNotice error={error} onRetry={refresh} label="issue" />}
+      {summaryError && summary && (
+        <StaleDataNotice error={summaryError} onRetry={refreshSummary} label="summary" />
+      )}
 
       {error && !data ? (
         <Panel>

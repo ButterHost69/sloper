@@ -114,16 +114,19 @@ export default function OverviewPage() {
   );
   const {
     data: events,
+    error: eventsError,
     refresh: refreshEvents,
     refreshing: eventsRefreshing,
   } = useInstanceData((base) => api.events(base, 5000), 10000);
   const {
     data: runs,
+    error: runsError,
     refresh: refreshRuns,
     refreshing: runsRefreshing,
   } = useInstanceData((base) => api.runs(base, 300), 15000);
   const {
     data: repo,
+    error: repoError,
     refresh: refreshRepo,
     refreshing: repoRefreshing,
   } = useInstanceData((base) => api.repo(base), 60000);
@@ -150,6 +153,7 @@ export default function OverviewPage() {
   const recentRuns = runList.slice(0, 7);
   const tickCount = summary?.events?.by_type?.['tick.completed'] ?? 0;
   const connected = health?.status === 'ok' && !healthError;
+  const secondaryError = eventsError ?? runsError ?? repoError;
   const refreshingAll =
     refreshing || eventsRefreshing || runsRefreshing || repoRefreshing || summaryLoading;
 
@@ -194,6 +198,9 @@ export default function OverviewPage() {
       ) : (
         <>
           {error && summary && <StaleDataNotice error={error} onRetry={refresh} label="dashboard" />}
+          {secondaryError && (events || runs || repo) && (
+            <StaleDataNotice error={secondaryError} onRetry={refreshAll} label="dashboard data" />
+          )}
           <section className="panel surface-grid relative overflow-hidden p-4 sm:p-5">
             <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
             <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

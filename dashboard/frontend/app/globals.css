@@ -49,18 +49,18 @@
 
   --color-ink: #0f1115;
   --color-ink-dim: #43464d;
-  --color-ink-faint: #777c85;
+  --color-ink-faint: #686d75;
 
-  --color-accent: #4176e6;
+  --color-accent: #2f61c8;
   --color-accent-dim: #3568d4;
   --color-accent-glow: rgb(65 118 230 / 12%);
   --color-danger: #dc2626;
-  --color-warn: #c77808;
+  --color-warn: #9a5b00;
   --color-info: #2563eb;
   --color-violet: #7c3aed;
   --color-fuchsia: #c026d3;
   --color-sky: #0284c7;
-  --color-emerald: #16a34a;
+  --color-emerald: #147a43;
   --color-amber: #d97706;
   --app-shadow: 0 18px 50px rgb(32 39 52 / 10%);
   --app-grid-line: rgb(15 17 21 / 2.5%);

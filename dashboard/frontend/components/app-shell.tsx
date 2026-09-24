@@ -162,7 +162,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.addEventListener('keydown', escape);
     return () => {
       window.removeEventListener('keydown', escape);
-      if (!isDesktop) mobileMenuButtonRef.current?.focus();
+      if (!isDesktop && !window.matchMedia('(min-width: 1024px)').matches) {
+        mobileMenuButtonRef.current?.focus();
+      }
     };
   }, [isDesktop, mobileOpen]);
 

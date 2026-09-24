@@ -15,7 +15,7 @@ import { useInstanceData } from '@/hooks/use-instance-data';
 import { useInstances } from '@/components/instance-context';
 import { api } from '@/lib/api';
 import { formatTime, timeAgo, truncate } from '@/lib/format';
-import { EmptyState, ErrorState, Panel, Skeleton } from '@/components/ui';
+import { EmptyState, ErrorState, Panel, Skeleton, StaleDataNotice } from '@/components/ui';
 import { LabelChips, ReviewStateBadge, StageBadge } from '@/components/badges';
 import { FailedMarker, PipelineDAG } from '@/components/pipeline-dag';
 import { RunsView } from '@/components/runs-view';
@@ -122,6 +122,7 @@ export default function IssueDetailPage() {
       <Link href="/issues" className="flex w-fit items-center gap-1.5 text-xs text-ink-dim transition hover:text-ink">
         <ArrowLeft size={14} /> Back to issues
       </Link>
+      {error && <StaleDataNotice error={error} onRetry={refresh} label="issue" />}
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
