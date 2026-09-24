@@ -72,6 +72,7 @@ The canonical tokens live in [`dashboard/frontend/app/globals.css`](../frontend/
 | `--color-ink-dim` | `#424245` | `#d2d2d7` | Supporting text |
 | `--color-ink-faint` | `#6e6e73` | `#a1a1a6` | Metadata and captions |
 | `--color-accent` | `#0071e3` | `#2997ff` | Links, focus, active state |
+| `--panel-highlight` | light inset edge | low-light inset edge | Solid panel material cue |
 | `--color-glass` | translucent white | translucent graphite | Base Liquid Glass chrome |
 | `--color-glass-sidebar` | 62% white | 76% graphite | Persistent navigation rail |
 | `--color-glass-topbar` | 58% white | 70% black-graphite | Sticky header |
@@ -91,6 +92,7 @@ The complete machine-readable contract is [`design-contract.json`](design-contra
 
 - Use a 64px desktop header, a 20px collapsed rail, and a single accent indicator for the active route.
 - Use `glass-chrome glass-sidebar` for the persistent navigation rail, `glass-chrome glass-topbar` for the sticky header, `glass-chrome glass-popover` for menus and temporary overlays, and `glass-chrome glass-control` for floating selectors and status capsules.
+- Render the instance picker through a body portal on desktop so it never covers the navigation column; keep it inside the mobile drawer so the drawer focus trap remains intact.
 - Let the CSS material provide `blur`, `saturate`, `contrast`, inset edge light, and shadow; do not stack a second translucent utility background over it.
 - Keep the raven mark and the lowercase `sloper` wordmark as the only visible brand lockup; the collapsed rail shows the raven alone.
 - Keep navigation labels visible on mobile; never persist a desktop rail state into the mobile drawer.
@@ -100,7 +102,7 @@ The complete machine-readable contract is [`design-contract.json`](design-contra
 
 - Use `panel` for content. Default radius: 18px.
 - Use `panel-hover` only for cards that navigate or expose a meaningful action.
-- Use a solid surface, a quiet border, and at most one soft shadow. Do not put a gradient or glow behind every panel.
+- Use a solid surface, a quiet border, at most one soft shadow, and the shared `--panel-highlight` inset. Do not put a gradient or glow behind every panel.
 - Let glass surfaces carry the blur and specular edge; let panels carry the data hierarchy.
 - Use `glass-hero` only when a single feature intentionally acts as a chapter or focal surface; it remains tonal, not a colored wash.
 
@@ -109,13 +111,15 @@ The complete machine-readable contract is [`design-contract.json`](design-contra
 - Primary actions use `--color-accent`, white text, and a capsule/pill radius when the action is singular and decisive.
 - Secondary actions use `--color-panel-2` and `--color-edge`.
 - Inputs are solid, border-led fields with a 4px accent focus ring.
+- Standalone links and icon controls use `.hit-target`; touch targets grow to at least 44px without changing the visual label.
 - Icon-only controls require an accessible name and a visible focus state.
 
 ### Data and status
 
-- Status badges use semantic colors, a small dot, and short literal labels.
+- Status badges use semantic colors, a small dot, and short literal labels. Planned items use a neutral/violet treatment without a live-looking dot.
 - Charts need a textual summary and keyboard-reachable data table; the visual chart is not the only representation.
-- Empty states explain what will appear and offer the next real action. Planned capabilities must say **Planned** and **Not implemented yet**.
+- Empty states stay compact, explain what will appear, and offer one real action such as clearing filters, refreshing, or widening a range. Planned capabilities must say **Planned** and **Not implemented yet**.
+- Connection state changes use a polite status region; errors use an alert only when recovery is actionable.
 
 ### Motion
 
@@ -153,4 +157,4 @@ Run the static contract check from the frontend package:
 npm run evaluate:design
 ```
 
-The contract is versioned with the material recipe: it verifies the four glass surface variants, the blur/saturation/contrast tokens, the raven integration, and the no-gradient guard. Then use Chrome MCP for a visual pass at 1440×900 and 390×844. The companion [`sloper-design-review`](../../.agents/skills/sloper-design-review/SKILL.md) skill describes the evidence and scorecard. A passing static check is necessary but not sufficient: the visual pass must confirm that the canvas is quiet, the chrome has a visible physical edge and layered depth, and operational data remains the foreground.
+The contract is versioned with the material and accessibility recipe: it verifies the four glass surface variants, shared panel highlights, hit targets, blur/saturation/contrast tokens, picker portal, raven integration, and the no-gradient guard. Then use Chrome MCP for a visual pass at 1440×900 and 390×844. The companion [`sloper-design-review`](../../.agents/skills/sloper-design-review/SKILL.md) skill describes the evidence and scorecard. A passing static check is necessary but not sufficient: the visual pass must confirm that the canvas is quiet, the chrome has a visible physical edge and layered depth, and operational data remains the foreground.

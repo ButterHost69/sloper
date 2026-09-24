@@ -109,6 +109,7 @@ function IssuesPageInner() {
   const counts = useMemo(() => summary?.issues?.by_stage ?? {}, [summary]);
 
   const shown = data?.issues.length ?? 0;
+  const hasFilters = Boolean(query.trim()) || stage !== 'all';
 
   return (
     <div className="space-y-5">
@@ -183,7 +184,7 @@ function IssuesPageInner() {
             </div>
           </Panel>
         ) : (
-          <Panel>
+          <Panel bodyClassName="p-0">
             <EmptyState
               title="Connect an instance to inspect issues"
               hint="Issue stages, specs, and cached activity come from the read-only Sloper API."
@@ -196,9 +197,34 @@ function IssuesPageInner() {
           </Panel>
         )
       ) : (
-        <Panel className="overflow-hidden p-0">
+        <Panel className="overflow-hidden" bodyClassName="p-0">
           {data.issues.length === 0 ? (
-            <EmptyState title="No matching issues" hint="Adjust the search or filter." />
+            <EmptyState
+               title={hasFilters ? 'No matching issues' : 'No issues yet'}
+               hint={
+                 hasFilters
+                   ? 'Adjust the search or clear the stage filter.'
+                   : 'This instance is connected but has not recorded issues yet.'
+               }
+               action={
+                 hasFilters ? (
+                   <button
+                     type="button"
+                     className="btn mt-1"
+                     onClick={() => {
+                       setQuery('');
+                       setStage('all');
+                     }}
+                   >
+                     Clear filters
+                   </button>
+                 ) : (
+                   <button type="button" className="btn mt-1" onClick={() => void refresh()}>
+                     Refresh instance
+                   </button>
+                 )
+               }
+             />
           ) : (
             <div>
               <div className="grid grid-cols-12 gap-3 border-b border-edge bg-panel-2 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-wider text-ink-faint">

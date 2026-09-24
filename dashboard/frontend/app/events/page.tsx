@@ -48,7 +48,7 @@ function eventInRange(event: EventRecord, hours: number): boolean {
 
 function NoInstanceState() {
   return (
-    <Panel>
+    <Panel bodyClassName="p-0">
       <EmptyState
         icon={<Activity size={19} />}
         title="Connect an instance to inspect events"
@@ -309,7 +309,7 @@ export default function EventsPage() {
               </Panel>
             ) : filtered.length === 0 ? (
               <>
-                <Panel>
+                <Panel bodyClassName="p-0">
                   <EmptyState
                     icon={<TimerReset size={19} />}
                     title={rangedEvents.length ? 'No matching events' : 'No events in this range'}
@@ -317,6 +317,24 @@ export default function EventsPage() {
                       rangedEvents.length
                         ? 'Adjust the search or event filter.'
                         : 'Try a wider range or wait for the coordinator to record activity.'
+                    }
+                    action={
+                      rangedEvents.length || hours >= 168 ? (
+                        <button
+                          type="button"
+                          className="btn mt-1"
+                          onClick={() => {
+                            setQuery('');
+                            setFilter('all');
+                          }}
+                        >
+                          Clear filters
+                        </button>
+                      ) : (
+                        <button type="button" className="btn mt-1" onClick={() => setHours(168)}>
+                          View 7 days
+                        </button>
+                      )
                     }
                   />
                 </Panel>

@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { normalizeUrl } from '@/lib/instances';
 import { timeAgo, formatBytes } from '@/lib/format';
 import type { Health, RepoInfo } from '@/lib/types';
-import { Panel, PulseDot, SectionHeader } from '@/components/ui';
+import { Panel, PulseDot, SectionHeader, EmptyState } from '@/components/ui';
 import { PageHeader } from '@/components/page-header';
 
 interface Probe {
@@ -78,7 +78,13 @@ function InstanceCard({
   onEdit: () => void;
   onRemove: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
+  const cancelRemoveRef = useRef<HTMLButtonElement>(null);
   const { probe, check } = useProbe(url);
+
+  useEffect(() => {
+    if (confirming) cancelRemoveRef.current?.focus();
+  }, [confirming]);
   const ok = !!probe.health;
 
   return (
@@ -131,15 +137,37 @@ function InstanceCard({
           >
             <Pencil size={14} />
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost !p-2"
-            onClick={onRemove}
-            title="Remove"
-            aria-label={`Remove ${name}`}
-          >
-            <Trash2 size={14} className="text-danger" />
-          </button>
+          {confirming ? (
+            <div className="flex items-center gap-1 rounded-lg border border-danger/30 bg-danger/[0.06] p-1" role="alert">
+              <span className="px-1 text-[11px] text-ink-dim">Remove connection?</span>
+              <button
+                type="button"
+                ref={cancelRemoveRef}
+                className="btn btn-ghost !min-h-8 !px-2 !py-1 text-[11px]"
+                onClick={() => setConfirming(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn !min-h-8 !border-danger/40 !bg-danger/10 !px-2 !py-1 text-[11px] !text-danger"
+                onClick={onRemove}
+                aria-label={`Confirm removing ${name}`}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-ghost !p-2"
+              onClick={() => setConfirming(true)}
+              title="Remove"
+              aria-label={`Remove ${name}`}
+            >
+              <Trash2 size={14} className="text-danger" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -168,7 +196,7 @@ function InstanceCard({
             )}
             <button
               onClick={() => void check()}
-              className="ml-auto text-xs text-accent hover:underline"
+              className="hit-target ml-auto text-xs text-accent hover:underline"
             >
               re-check
             </button>
@@ -267,6 +295,8 @@ export default function InstancesPage() {
                 <input
                   id="instance-name"
                   className="input"
+                  aria-invalid={Boolean(formError)}
+                  aria-describedby={formError ? 'instance-form-error' : undefined}
                   placeholder="e.g. Staging"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -278,6 +308,8 @@ export default function InstancesPage() {
                 <input
                   id="instance-url"
                   className="input mono"
+                  aria-invalid={Boolean(formError)}
+                  aria-describedby={formError ? 'instance-form-error' : undefined}
                   placeholder="http://localhost:8080"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
@@ -301,7 +333,7 @@ export default function InstancesPage() {
               </div>
             </div>
             {formError && (
-              <p className="flex items-center gap-1.5 text-xs text-danger">
+              <p id="instance-form-error" role="alert" className="flex items-center gap-1.5 text-xs text-danger">
                 <XCircle size={13} /> {formError}
               </p>
             )}
@@ -333,10 +365,17 @@ export default function InstancesPage() {
       </div>
 
       {instances.length === 0 && (
-        <Panel>
-          <p className="py-8 text-center text-sm text-ink-dim">
-            No instances configured. Add your first sloper web server above.
-          </p>
+        <Panel bodyClassName="p-0">
+          <EmptyState
+            icon={<Server size={19} />}
+            title="No instances configured"
+            hint="Add your first Sloper web server to begin observing it."
+            action={
+              <button type="button" className="btn btn-primary mt-1" onClick={() => setShowForm(true)}>
+                <Plus size={14} /> Add instance
+              </button>
+            }
+          />
         </Panel>
       )}
 

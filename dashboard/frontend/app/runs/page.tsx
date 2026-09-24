@@ -125,6 +125,7 @@ function RunsPageInner() {
     [runs, status, stage],
   );
 
+  const hasFilters = status !== 'all' || stage !== 'all';
   const statusCounts = useMemo(() => {
     const counts: Record<StatusFilter, number> = {
       all: runs.length,
@@ -212,7 +213,7 @@ function RunsPageInner() {
             </div>
           </Panel>
         ) : (
-          <Panel>
+          <Panel bodyClassName="p-0">
             <EmptyState
               title="Connect an instance to inspect runs"
               hint="Run history and captured agent output come from the read-only Sloper API."
@@ -227,13 +228,31 @@ function RunsPageInner() {
       ) : (
         <>
           {filtered.length === 0 ? (
-            <Panel>
+            <Panel bodyClassName="p-0">
               <EmptyState
                 title={runs.length ? 'No runs match these filters' : 'No runs yet'}
                 hint={
                   runs.length
                     ? 'Try another status or stage filter.'
                     : 'Pipeline executions will show up here.'
+                }
+                action={
+                  hasFilters ? (
+                    <button
+                      type="button"
+                      className="btn mt-1"
+                      onClick={() => {
+                        setStatus('all');
+                        setStage('all');
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  ) : (
+                    <button type="button" className="btn mt-1" onClick={() => void refresh()}>
+                      Refresh instance
+                    </button>
+                  )
                 }
               />
             </Panel>

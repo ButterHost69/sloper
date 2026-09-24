@@ -61,6 +61,10 @@ The comparison is about restraint and material behavior, not copying Apple produ
 - Blue should be scarce and reserved for actions, links, focus, and selection.
 - Borders and surface steps should do most of the depth work; shadows should remain soft and occasional.
 - The expanded brand lockup should contain only the raven mark and lowercase `sloper`; the collapsed rail should show the raven alone.
+- The instance picker must be anchored outside the desktop navigation column, remain inside the mobile focus trap, expose menu semantics, and restore focus predictably.
+- Standalone links and icon controls need a measurable hit area; do not accept a 14px icon link or a 16px action link as a finished control.
+- Empty states should be compact, explain the condition, and offer one real recovery or navigation action.
+- Connection/freshness changes need a visible timestamp or snapshot message and a polite status announcement; errors should remain distinguishable from empty states.
 - No single screenshot should be accepted if it looks like a generic neon glass dashboard.
 
 ## Scorecard
@@ -72,7 +76,7 @@ Report:
 | Foundations and tokens | 25 | Required semantic tokens and no ambient gradient tokens |
 | Glass placement | 25 | Liquid Glass is visible in chrome/overlays, not every content card, and its edge/depth recipe is legible |
 | Hierarchy and rhythm | 20 | Solid surfaces, clear type hierarchy, restrained blue and shadows |
-| Accessibility | 20 | Focus, contrast, keyboard drawer behavior, reduced motion/transparency |
-| Responsive behavior | 10 | Mobile drawer and dense data remain usable at 390px |
+| Accessibility | 20 | Focus, contrast, target sizes, keyboard drawer/picker behavior, status announcements, reduced motion/transparency |
+| Responsive behavior | 10 | Mobile drawer, compact empty states, and dense data remain usable at 390px |
 
 A visual review is not a pixel-diff against Apple. It is a reasoned comparison against the documented principles. Include the exact commit, routes inspected, viewport sizes, static-check output, and any remaining blockers.

@@ -43,10 +43,6 @@ export function StatCard({
 }) {
   const content = (
     <>
-      <div
-        className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full opacity-[0.09] blur-3xl"
-        style={{ background: accent }}
-      />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">{label}</p>
@@ -125,9 +121,12 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-5 py-14 text-center">
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-edge bg-panel-2 text-ink-faint">
-        {icon ?? <CircleAlert size={19} aria-hidden="true" />}
+    <div className="flex flex-col items-center justify-center gap-2.5 px-5 py-8 text-center sm:py-10">
+      <div
+        className="flex h-11 w-11 items-center justify-center rounded-xl border border-edge bg-panel-2 text-ink-faint"
+        aria-hidden="true"
+      >
+        {icon ?? <CircleAlert size={19} />}
       </div>
       <div>
         <p className="text-sm font-medium text-ink">{title}</p>

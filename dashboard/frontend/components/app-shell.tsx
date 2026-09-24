@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import {
   Activity,
@@ -28,6 +29,7 @@ import { RavenLogo } from '@/components/raven-logo';
 import { useInstances } from '@/components/instance-context';
 import { useHealth } from '@/components/health-context';
 import { safeHost } from '@/lib/instances';
+import { timeAgo } from '@/lib/format';
 
 type Theme = 'dark' | 'light';
 
@@ -95,18 +97,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const meta = pageMeta(pathname);
   const { instances, active, setActive } = useInstances();
-  const { health, error: healthError, refresh, refreshing } = useHealth();
+  const { health, error: healthError, refresh, refreshing, lastSuccessfulAt } = useHealth();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
   const [theme, setTheme] = useState<Theme>('light');
   const pickerRef = useRef<HTMLDivElement>(null);
+  const pickerMenuRef = useRef<HTMLDivElement>(null);
   const pickerButtonRef = useRef<HTMLButtonElement>(null);
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
 
   const connected = health?.status === 'ok' && !healthError;
+  const lastSuccessfulIso = lastSuccessfulAt ? new Date(lastSuccessfulAt).toISOString() : undefined;
   const rail = isDesktop && collapsed;
 
   useEffect(() => {
@@ -125,6 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const update = () => {
       setIsDesktop(media.matches);
       setMobileOpen(false);
+      setPickerOpen(false);
     };
     update();
     media.addEventListener('change', update);
@@ -134,17 +139,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!pickerOpen) return;
     const close = (event: PointerEvent) => {
-      if (!pickerRef.current?.contains(event.target as Node)) setPickerOpen(false);
+      const target = event.target as Node;
+      const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      const insidePicker = path.length > 0
+        ? path.some((node) => node instanceof Node && (pickerRef.current?.contains(node) || pickerMenuRef.current?.contains(node)))
+        : pickerRef.current?.contains(target) || pickerMenuRef.current?.contains(target);
+      if (!insidePicker) setPickerOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setPickerOpen(false);
+      if (event.key === 'Escape') {
+        setPickerOpen(false);
+        pickerButtonRef.current?.focus();
+      }
     };
     window.addEventListener('pointerdown', close);
     window.addEventListener('keydown', escape);
+    requestAnimationFrame(() => {
+      const current = pickerMenuRef.current?.querySelector<HTMLElement>(
+        '[role="menuitemradio"][aria-checked="true"]',
+      );
+      const first = pickerMenuRef.current?.querySelector<HTMLElement>('[role="menuitemradio"], [role="menuitem"]');
+      (current ?? first)?.focus();
+    });
     return () => {
       window.removeEventListener('pointerdown', close);
       window.removeEventListener('keydown', escape);
-      pickerButtonRef.current?.focus();
     };
   }, [pickerOpen]);
 
@@ -162,6 +181,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       }
     };
   }, [isDesktop, mobileOpen]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -201,8 +229,85 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const handlePickerKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    const items = Array.from(
+      pickerMenuRef.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"], [role="menuitem"]') ?? [],
+    );
+    if (items.length === 0) return;
+    event.preventDefault();
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    const next = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? items.length - 1
+        : event.key === 'ArrowDown'
+          ? (current + 1 + items.length) % items.length
+          : (current - 1 + items.length) % items.length;
+    items[next]?.focus();
+  };
+
+  const pickerMenu = (
+    <div
+      ref={pickerMenuRef}
+      id="instance-picker-menu"
+      role="menu"
+      aria-label="Choose an instance"
+      onKeyDown={handlePickerKeyDown}
+      className={clsx(
+        'glass-chrome glass-popover z-[70] overflow-hidden rounded-2xl border border-edge-2 p-1.5',
+        isDesktop
+          ? '!fixed left-[264px] top-[76px] w-[280px]'
+          : '!absolute left-3 right-3 top-[70px]',
+      )}
+    >
+      {instances.length === 0 && (
+        <p className="px-3 py-3 text-xs leading-5 text-ink-faint">No instances configured yet.</p>
+      )}
+      {instances.map((instance) => (
+        <button
+          key={instance.id}
+          type="button"
+          role="menuitemradio"
+          aria-checked={instance.id === active?.id}
+          onClick={() => {
+            setActive(instance.id);
+            setPickerOpen(false);
+            pickerButtonRef.current?.focus();
+          }}
+          className={clsx(
+            'flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition hover:bg-panel-2',
+            instance.id === active?.id && 'bg-panel-2',
+          )}
+        >
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs font-medium text-ink">{instance.name}</span>
+            <span className="block truncate text-[10px] text-ink-faint">{instance.url}</span>
+          </span>
+          {instance.id === active?.id && <Check size={14} className="text-accent" aria-hidden="true" />}
+        </button>
+      ))}
+      <Link
+        href="/instances"
+        role="menuitem"
+        onClick={() => setPickerOpen(false)}
+        className="mt-1 flex min-h-11 items-center gap-2 border-t border-edge px-3 py-2.5 text-xs font-medium text-accent transition hover:bg-panel-2"
+      >
+        <Plus size={13} aria-hidden="true" /> Manage instances
+      </Link>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-transparent">
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {connected
+          ? `Connected to ${active?.name ?? 'the selected instance'}`
+          : active
+            ? `${active.name} is unavailable`
+            : 'No instance selected'}
+      </p>
       {mobileOpen && (
         <button
           className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px] lg:hidden"
@@ -274,7 +379,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 'glass-chrome glass-control flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition hover:border-edge-2',
                 pickerOpen && 'border-accent-dim/60',
               )}
-              aria-expanded={pickerOpen}
+              aria-haspopup="menu"
+               aria-expanded={pickerOpen}
               aria-controls="instance-picker-menu"
             >
               <span
@@ -294,47 +400,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <ChevronsUpDown size={14} className="text-ink-faint" />
             </button>
 
-            {pickerOpen && (
-              <div
-                id="instance-picker-menu"
-                aria-label="Choose an instance"
-                className="glass-chrome glass-popover absolute left-3 right-3 top-[70px] z-50 overflow-hidden rounded-2xl border border-edge-2 p-1.5"
-              >
-                {instances.length === 0 && (
-                  <p className="px-3 py-3 text-xs leading-5 text-ink-faint">
-                    No instances configured yet.
-                  </p>
-                )}
-                {instances.map((instance) => (
-                  <button
-                    key={instance.id}
-                    onClick={() => {
-                      setActive(instance.id);
-                      setPickerOpen(false);
-                    }}
-                    className={clsx(
-                      'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition hover:bg-panel-2',
-                      instance.id === active?.id && 'bg-panel-2',
-                    )}
-                    aria-pressed={instance.id === active?.id}
-                  >
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-medium text-ink">{instance.name}</span>
-                      <span className="block truncate text-[10px] text-ink-faint">{instance.url}</span>
-                    </span>
-                    {instance.id === active?.id && <Check size={14} className="text-accent" />}
-                  </button>
-                ))}
-                <Link
-                  href="/instances"
-                  onClick={() => setPickerOpen(false)}
-                  className="mt-1 flex items-center gap-2 border-t border-edge px-3 py-2.5 text-xs font-medium text-accent transition hover:bg-panel-2"
-                >
-                  <Plus size={13} /> Manage instances
-                </Link>
-              </div>
-            )}
+            {pickerOpen &&
+              (isDesktop && typeof document !== 'undefined'
+                ? createPortal(pickerMenu, document.body)
+                : pickerMenu)}
           </div>
         )}
 
@@ -356,7 +425,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-label="Primary navigation">
+        <nav
+          className={clsx(
+            'min-h-0 flex-1 overflow-y-auto px-3 py-4',
+            pickerOpen && !rail && !isDesktop && 'pt-[164px]',
+          )}
+          aria-label="Primary navigation"
+        >
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-5 last:mb-0">
               {!rail && (
@@ -431,12 +506,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     {health?.repo ?? active?.name ?? 'No instance selected'}
                   </p>
                   <p className="mt-0.5 text-[10px] text-ink-faint">
-                    {connected ? 'API connected' : 'API unavailable'}
+                    {connected ? (
+                      <>
+                        API connected · checked <time dateTime={health?.time}>{timeAgo(health?.time)}</time>
+                      </>
+                    ) : lastSuccessfulIso ? (
+                      <>
+                        API unavailable · snapshot <time dateTime={lastSuccessfulIso}>{timeAgo(lastSuccessfulIso)}</time>
+                      </>
+                    ) : (
+                      'API unavailable'
+                    )}
                   </p>
                 </div>
                 <Link
                   href="/instances"
-                  className="text-ink-faint transition hover:text-ink"
+                  className="hit-target text-ink-faint transition hover:text-ink"
                   aria-label="Instance settings"
                 >
                   <Settings size={14} />
@@ -460,7 +545,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <button
             ref={mobileMenuButtonRef}
             className="btn btn-ghost mr-2 !h-9 !min-h-9 !w-9 !p-0 lg:hidden"
-            onClick={() => setMobileOpen(true)}
+            onClick={() => {
+              setPickerOpen(false);
+              setMobileOpen(true);
+            }}
             aria-label="Open navigation"
             aria-expanded={mobileOpen}
             aria-controls="primary-navigation"
@@ -493,6 +581,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="btn btn-ghost !h-9 !min-h-9 !w-9 !p-0"
               onClick={refresh}
               disabled={refreshing}
+              aria-busy={refreshing}
               aria-label="Refresh instance health"
               title="Refresh instance health"
             >

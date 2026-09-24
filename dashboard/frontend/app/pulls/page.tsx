@@ -184,6 +184,7 @@ export default function PullsPage() {
     });
   }, [allPulls, filter, query]);
 
+  const hasFilters = filter !== 'all' || Boolean(query.trim());
   const groups = useMemo(
     () =>
       (['open', 'merged', 'closed'] as const)
@@ -281,7 +282,7 @@ export default function PullsPage() {
             ))}
           </div>
         ) : (
-          <Panel>
+          <Panel bodyClassName="p-0">
             <EmptyState
               icon={<GitPullRequest size={19} />}
               title="Connect an instance to inspect pull requests"
@@ -297,11 +298,33 @@ export default function PullsPage() {
       ) : (
         <>
           {filtered.length === 0 ? (
-            <Panel>
+            <Panel bodyClassName="p-0">
               <EmptyState
                 icon={<GitPullRequest size={19} />}
                 title={allPulls.length ? 'No matching pull requests' : 'No pull requests yet'}
-                hint="Pull requests created by implemented issues appear here with their current GitHub state."
+                hint={
+                  allPulls.length
+                    ? 'Try another search or state filter.'
+                    : 'Pull requests created by implemented issues appear here with their current GitHub state.'
+                }
+                action={
+                  hasFilters ? (
+                    <button
+                      type="button"
+                      className="btn mt-1"
+                      onClick={() => {
+                        setQuery('');
+                        setFilter('all');
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  ) : (
+                    <button type="button" className="btn mt-1" onClick={() => void refresh()}>
+                      Refresh instance
+                    </button>
+                  )
+                }
               />
             </Panel>
           ) : (

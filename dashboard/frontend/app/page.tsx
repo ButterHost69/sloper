@@ -183,6 +183,7 @@ export default function OverviewPage() {
           className="btn self-start sm:self-auto"
           onClick={refreshAll}
           disabled={!active || refreshingAll}
+          aria-busy={refreshingAll}
         >
           <RefreshCw size={14} className={refreshingAll ? 'animate-spin' : ''} />
           Refresh dashboard
@@ -202,7 +203,6 @@ export default function OverviewPage() {
             <StaleDataNotice error={secondaryError} onRetry={refreshAll} label="dashboard data" />
           )}
           <section className="panel glass-hero surface-grid relative overflow-hidden p-4 sm:p-5">
-            <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/10 blur-3xl" />
             <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">
                 <span
@@ -316,7 +316,7 @@ export default function OverviewPage() {
               <Panel
                 title="Recent runs"
                 action={
-                  <Link href="/runs" className="text-[11px] font-medium text-accent hover:underline">
+                  <Link href="/runs" className="hit-target text-[11px] font-medium text-accent hover:underline">
                     View all <ArrowRight size={11} className="inline" />
                   </Link>
                 }
@@ -390,7 +390,7 @@ export default function OverviewPage() {
               <Panel
                 title="On the roadmap"
                 action={
-                  <Link href="/roadmap" className="text-[11px] font-medium text-accent hover:underline">
+                  <Link href="/roadmap" className="hit-target text-[11px] font-medium text-accent hover:underline">
                     Preview all
                   </Link>
                 }

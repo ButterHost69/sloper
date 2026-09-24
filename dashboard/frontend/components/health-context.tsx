@@ -10,6 +10,7 @@ interface HealthContextValue {
   error: Error | null;
   refresh: () => void;
   refreshing: boolean;
+  lastSuccessfulAt: number | null;
 }
 
 const HealthContext = createContext<HealthContextValue | null>(null);
@@ -19,11 +20,14 @@ const HealthContext = createContext<HealthContextValue | null>(null);
  * instance is not probed twice per cycle.
  */
 export function HealthProvider({ children }: { children: ReactNode }) {
-  const { data, error, refresh, refreshing } = useInstanceData((base) => api.health(base), 15000);
+  const { data, error, refresh, refreshing, lastSuccessfulAt } = useInstanceData(
+    (base) => api.health(base),
+    15000,
+  );
 
   const value = useMemo(
-    () => ({ health: data, error, refresh, refreshing }),
-    [data, error, refresh, refreshing],
+    () => ({ health: data, error, refresh, refreshing, lastSuccessfulAt }),
+    [data, error, refresh, refreshing, lastSuccessfulAt],
   );
 
   return <HealthContext.Provider value={value}>{children}</HealthContext.Provider>;

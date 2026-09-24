@@ -25,35 +25,30 @@ const liveFeatures = [
     description: 'Search cached issues, follow pipeline stage, and inspect agent specs and activity.',
     href: '/issues',
     icon: ListChecks,
-    color: '#38bdf8',
   },
   {
     title: 'Pull Requests',
     description: 'Track open PRs, review rounds, and the point where a change is ready for human acceptance.',
     href: '/pulls',
     icon: GitPullRequest,
-    color: '#e879f9',
   },
   {
     title: 'Runs',
     description: 'Monitor in-flight and failed agent runs with stage, status, and execution history.',
     href: '/runs',
     icon: Activity,
-    color: '#fbbf24',
   },
   {
     title: 'Events',
     description: 'Inspect the read-only audit stream and hourly activity timeline for the selected range.',
     href: '/events',
     icon: ScrollText,
-    color: '#7aaaff',
   },
   {
     title: 'Instances',
     description: 'Connect to multiple read-only sloper APIs and inspect their health and repository context.',
     href: '/instances',
     icon: ServerCog,
-    color: '#34d399',
   },
 ];
 
@@ -116,9 +111,7 @@ const pipelineStages = [
 export default function RoadmapPage() {
   return (
     <div className="space-y-8">
-      <header className="glass-hero panel relative overflow-hidden px-5 py-7 sm:px-7 sm:py-9">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent/[0.08] blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 right-1/3 h-28 w-28 rounded-full bg-violet/[0.07] blur-3xl" />
+      <header className="glass-hero panel relative overflow-hidden px-5 py-6 sm:px-7 sm:py-7">
         <div className="relative max-w-3xl">
           <div className="flex flex-wrap items-center gap-2">
             <Badge color="#34d399" dot>
@@ -161,21 +154,18 @@ export default function RoadmapPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {liveFeatures.map(({ title, description, href, icon: Icon, color }) => (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {liveFeatures.map(({ title, description, href, icon: Icon }) => (
             <Link
               key={title}
               href={href}
               className="panel panel-hover group flex min-h-44 flex-col p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <div className="flex items-start justify-between gap-3">
-                <span
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border"
-                  style={{ color, borderColor: `${color}35`, backgroundColor: `${color}12` }}
-                >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-accent/25 bg-accent/10 text-accent">
                   <Icon size={17} aria-hidden="true" />
                 </span>
-                <Badge color={color} dot>
+                <Badge color="var(--color-accent)" dot>
                   Live
                 </Badge>
               </div>
@@ -206,10 +196,6 @@ export default function RoadmapPage() {
           {plannedFeatures.map(
             ({ title, eyebrow, description, detail, icon: Icon, color, href, linkLabel }) => (
               <article key={title} className="panel relative overflow-hidden p-5 sm:p-6">
-              <div
-                className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full blur-3xl"
-                style={{ backgroundColor: `${color}12` }}
-              />
               <div className="relative">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -224,7 +210,7 @@ export default function RoadmapPage() {
                       <h3 className="mt-0.5 text-base font-semibold text-ink">{title}</h3>
                     </div>
                   </div>
-                  <Badge color={color} dot>
+                  <Badge color={color}>
                     Planned
                   </Badge>
                 </div>
@@ -240,7 +226,7 @@ export default function RoadmapPage() {
                 </div>
                 <Link
                   href={href}
-                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
+                  className="hit-target mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
                 >
                   {linkLabel} <ArrowRight size={12} aria-hidden="true" />
                 </Link>

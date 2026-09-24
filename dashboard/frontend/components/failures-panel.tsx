@@ -47,7 +47,7 @@ export function FailuresPanel({
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-dim">
           <TriangleAlert size={13} className="text-danger" /> Failures
         </h3>
-        <Link href="/runs?status=attention" className="text-xs text-accent hover:underline">
+        <Link href="/runs?status=attention" className="hit-target text-xs text-accent hover:underline">
           View all →
         </Link>
       </header>

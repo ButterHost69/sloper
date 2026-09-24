@@ -1,6 +1,6 @@
 {
   "name": "sloper-apple-glass",
-  "version": 2,
+  "version": 3,
   "description": "Static contract for Sloper's quiet Apple-inspired Liquid Glass operator console.",
   "requiredFiles": [
     "dashboard/frontend/app/globals.css",
@@ -20,6 +20,7 @@
     "--color-ink-dim",
     "--color-ink-faint",
     "--color-accent",
+    "--panel-highlight",
     "--color-glass",
     "--color-glass-sidebar",
     "--color-glass-topbar",
@@ -35,6 +36,7 @@
   "requiredCssSelectors": [
     ".panel",
     ".panel-hover",
+    ".hit-target",
     ".glass-chrome",
     ".glass-sidebar",
     ".glass-topbar",
@@ -98,6 +100,16 @@
       "file": "dashboard/frontend/components/app-shell.tsx",
       "pattern": "RavenLogo",
       "reason": "The shell brand mark must be the original raven logo."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "createPortal",
+      "reason": "The instance picker must escape the sidebar stacking context."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "aria-live",
+      "reason": "Connection transitions must be announced to assistive technology."
     }
   ],
   "forbiddenComponentPatterns": [

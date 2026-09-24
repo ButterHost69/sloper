@@ -68,6 +68,12 @@ make dashboard
 Open http://localhost:3000, add your instances on the **Instances** page, and the
 console will start polling them.
 
+For deployments where the API is not on the default `http://localhost:8080`, set
+`NEXT_PUBLIC_SLOPER_DEFAULT_URL` before building the dashboard (for example,
+`NEXT_PUBLIC_SLOPER_DEFAULT_URL=http://sloper-api:8080 make build-dashboard`). The
+value seeds the first-run instance card; saved instances still take precedence. See
+[`frontend/.env.example`](frontend/.env.example) for a copyable template.
+
 ## API
 
 The Go server (`app/web/main.go`) exposes read-only JSON over the sloper SQLite DB.

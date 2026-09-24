@@ -37,7 +37,11 @@ export function ActivityChart({ data, hours = 24 }: { data: ActivityBucket[]; ho
 
   return (
     <div>
-      <div className="relative h-[230px] w-full" role="img" aria-label={chartLabel}>
+      <div
+        className={`relative w-full ${total === 0 ? 'h-[180px] sm:h-[200px]' : 'h-[230px]'}`}
+        role="img"
+        aria-label={chartLabel}
+      >
         <div className="h-full w-full" aria-hidden="true">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart

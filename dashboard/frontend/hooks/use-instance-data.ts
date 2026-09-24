@@ -9,6 +9,7 @@ export interface DataState<T> {
   error: ApiError | Error | null;
   loading: boolean;
   refreshing: boolean;
+  lastSuccessfulAt: number | null;
   refresh: () => void;
 }
 
@@ -34,6 +35,7 @@ export function useInstanceData<T>(
   const [error, setError] = useState<ApiError | Error | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastSuccessfulAt, setLastSuccessfulAt] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
   const dataUrlRef = useRef<string | null>(null);
@@ -53,6 +55,7 @@ export function useInstanceData<T>(
         dataUrlRef.current = null;
         setData(null);
         setError(null);
+        setLastSuccessfulAt(null);
         setLoading(false);
         setRefreshing(false);
         return;
@@ -61,6 +64,7 @@ export function useInstanceData<T>(
         dataUrlRef.current = url;
         setData(null);
         setError(null);
+        setLastSuccessfulAt(null);
       }
       if (!isRefresh) setLoading(true);
       else setRefreshing(true);
@@ -69,6 +73,7 @@ export function useInstanceData<T>(
         if (requestId !== requestIdRef.current) return;
         setData(result);
         setError(null);
+        setLastSuccessfulAt(Date.now());
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
         setError(err instanceof ApiError ? err : (err as Error));
@@ -98,5 +103,5 @@ export function useInstanceData<T>(
 
   const refresh = useCallback(() => void load(true), [load]);
 
-  return { data, error, loading, refreshing, refresh };
+  return { data, error, loading, refreshing, lastSuccessfulAt, refresh };
 }
