@@ -66,18 +66,6 @@
   --app-grid-line: rgb(15 17 21 / 2.5%);
 }
 
-:root {
-  --badge-ink: var(--badge-raw);
-  --badge-border: color-mix(in srgb, var(--badge-raw) 34%, transparent);
-  --badge-bg: color-mix(in srgb, var(--badge-raw) 8%, transparent);
-}
-
-:root[data-theme="light"] {
-  --badge-ink: color-mix(in srgb, var(--badge-raw) 45%, var(--color-ink));
-  --badge-border: color-mix(in srgb, var(--badge-raw) 42%, transparent);
-  --badge-bg: color-mix(in srgb, var(--badge-raw) 11%, transparent);
-}
-
 html {
   min-width: 320px;
   background: var(--color-base);
@@ -177,9 +165,15 @@ button:not(:disabled),
   }
 
   .badge {
-    color: var(--badge-ink);
-    border-color: var(--badge-border);
-    background: var(--badge-bg);
+    color: var(--badge-raw);
+    border-color: color-mix(in srgb, var(--badge-raw) 34%, transparent);
+    background: color-mix(in srgb, var(--badge-raw) 8%, transparent);
+  }
+
+  :root[data-theme="light"] .badge {
+    color: color-mix(in srgb, var(--badge-raw) 45%, var(--color-ink));
+    border-color: color-mix(in srgb, var(--badge-raw) 42%, transparent);
+    background: color-mix(in srgb, var(--badge-raw) 11%, transparent);
   }
 
   .btn {
