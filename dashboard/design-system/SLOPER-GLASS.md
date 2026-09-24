@@ -54,7 +54,7 @@ Issue titles, run status, event messages, and health state carry the visual weig
 
 The shell, sticky header, and temporary menus use the same layered material recipe: a translucent neutral fill, a strong blur with saturation and a small contrast lift, a one-pixel light-catching edge, and a soft shadow. The edge treatment comes from inset box shadows and a non-interactive pseudo-element; it does not come from a page-wide gradient or a rainbow sheen. The sidebar, top bar, and popover use slightly different opacity values so their depth reads as a stack of real surfaces.
 
-Keep the material quiet enough that text remains the darkest or lightest element. A glass surface should be recognizable by its edge, blur, and layered shadow even when the backdrop is a plain solid tone.
+Keep the material quiet enough that text remains the darkest or lightest element. A glass surface should be recognizable by its edge, blur, and layered shadow even when the backdrop is a plain solid tone. Popovers use the most opaque glass variant so their labels stay legible over navigation content while still retaining the same blur and edge treatment.
 
 ## Token contract
 
@@ -75,7 +75,7 @@ The canonical tokens live in [`dashboard/frontend/app/globals.css`](../frontend/
 | `--color-glass` | translucent white | translucent graphite | Base Liquid Glass chrome |
 | `--color-glass-sidebar` | 62% white | 76% graphite | Persistent navigation rail |
 | `--color-glass-topbar` | 58% white | 70% black-graphite | Sticky header |
-| `--color-glass-popover` | 82% white | 88% graphite | Menus and temporary overlays |
+| `--color-glass-popover` | 92% white | 94% graphite | Menus and temporary overlays |
 | `--color-glass-control` | 72% white | 80% graphite | Floating selectors and status capsules |
 | `--glass-blur` | `32px` | `32px` | Backdrop diffusion |
 | `--glass-saturate` | `180%` | `180%` | Backdrop color retention |

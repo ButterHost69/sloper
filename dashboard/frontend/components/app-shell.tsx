@@ -298,7 +298,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div
                 id="instance-picker-menu"
                 aria-label="Choose an instance"
-                className="glass-chrome glass-popover absolute left-3 right-3 top-[142px] z-50 overflow-hidden rounded-2xl border border-edge-2 p-1.5"
+                className="glass-chrome glass-popover absolute left-3 right-3 top-[70px] z-50 overflow-hidden rounded-2xl border border-edge-2 p-1.5"
               >
                 {instances.length === 0 && (
                   <p className="px-3 py-3 text-xs leading-5 text-ink-faint">
