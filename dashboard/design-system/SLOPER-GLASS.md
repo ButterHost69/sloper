@@ -75,7 +75,7 @@ The canonical tokens live in [`dashboard/frontend/app/globals.css`](../frontend/
 | `--color-glass` | translucent white | translucent graphite | Base Liquid Glass chrome |
 | `--color-glass-sidebar` | 62% white | 76% graphite | Persistent navigation rail |
 | `--color-glass-topbar` | 58% white | 70% black-graphite | Sticky header |
-| `--color-glass-popover` | 92% white | 94% graphite | Menus and temporary overlays |
+| `--color-glass-popover` | 96% white | 96% graphite | Menus and temporary overlays |
 | `--color-glass-control` | 72% white | 80% graphite | Floating selectors and status capsules |
 | `--glass-blur` | `32px` | `32px` | Backdrop diffusion |
 | `--glass-saturate` | `180%` | `180%` | Backdrop color retention |

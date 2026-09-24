@@ -40,7 +40,7 @@
   --color-glass: rgb(255 255 255 / 68%);
   --color-glass-sidebar: rgb(255 255 255 / 62%);
   --color-glass-topbar: rgb(255 255 255 / 58%);
-  --color-glass-popover: rgb(255 255 255 / 92%);
+  --color-glass-popover: rgb(255 255 255 / 96%);
   --color-glass-control: rgb(255 255 255 / 72%);
   --glass-blur: 32px;
   --glass-saturate: 180%;
@@ -87,7 +87,7 @@
   --color-glass: rgb(29 29 31 / 72%);
   --color-glass-sidebar: rgb(26 26 28 / 76%);
   --color-glass-topbar: rgb(20 20 22 / 70%);
-  --color-glass-popover: rgb(38 38 41 / 94%);
+  --color-glass-popover: rgb(38 38 41 / 96%);
   --color-glass-control: rgb(42 42 45 / 80%);
   --glass-highlight: rgb(255 255 255 / 18%);
   --glass-edge: rgb(255 255 255 / 14%);
