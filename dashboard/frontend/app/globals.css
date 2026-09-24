@@ -37,11 +37,20 @@
   --app-shadow: 0 8px 24px rgb(0 0 0 / 8%);
   --app-shadow-strong: 0 12px 32px rgb(0 0 0 / 12%);
   --app-grid-line: rgb(0 0 0 / 3%);
-  --color-glass: rgb(255 255 255 / 82%);
-  --glass-blur: 24px;
-  --glass-saturate: 120%;
-  --glass-highlight: rgb(255 255 255 / 72%);
-  --glass-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 72%);
+  --color-glass: rgb(255 255 255 / 68%);
+  --color-glass-sidebar: rgb(255 255 255 / 62%);
+  --color-glass-topbar: rgb(255 255 255 / 58%);
+  --color-glass-popover: rgb(255 255 255 / 82%);
+  --color-glass-control: rgb(255 255 255 / 72%);
+  --glass-blur: 32px;
+  --glass-saturate: 180%;
+  --glass-contrast: 108%;
+  --glass-highlight: rgb(255 255 255 / 86%);
+  --glass-edge: rgb(255 255 255 / 62%);
+  --glass-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 86%),
+    inset 1px 0 0 rgb(255 255 255 / 34%), inset 0 -1px 0 rgb(0 0 0 / 8%);
+  --glass-shadow: 0 10px 28px rgb(0 0 0 / 8%);
+  --glass-shadow-deep: 0 18px 44px rgb(0 0 0 / 14%);
   --accent-hover: #0077ed;
   --accent-active: #0066cc;
   --ease-standard: cubic-bezier(0.28, 0, 0.22, 1);
@@ -75,9 +84,17 @@
   --app-shadow: 0 12px 32px rgb(0 0 0 / 32%);
   --app-shadow-strong: 0 18px 42px rgb(0 0 0 / 42%);
   --app-grid-line: rgb(255 255 255 / 3%);
-  --color-glass: rgb(29 29 31 / 84%);
-  --glass-highlight: rgb(255 255 255 / 12%);
-  --glass-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 10%);
+  --color-glass: rgb(29 29 31 / 72%);
+  --color-glass-sidebar: rgb(26 26 28 / 76%);
+  --color-glass-topbar: rgb(20 20 22 / 70%);
+  --color-glass-popover: rgb(38 38 41 / 88%);
+  --color-glass-control: rgb(42 42 45 / 80%);
+  --glass-highlight: rgb(255 255 255 / 18%);
+  --glass-edge: rgb(255 255 255 / 14%);
+  --glass-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 16%),
+    inset 1px 0 0 rgb(255 255 255 / 7%), inset 0 -1px 0 rgb(0 0 0 / 30%);
+  --glass-shadow: 0 12px 32px rgb(0 0 0 / 35%);
+  --glass-shadow-deep: 0 20px 50px rgb(0 0 0 / 46%);
   --accent-hover: #2997ff;
   --accent-active: #0071e3;
 }
@@ -172,11 +189,56 @@ button:not(:disabled),
   }
 
   .glass-chrome {
-    border-color: var(--color-edge);
+    position: relative;
+    isolation: isolate;
+    border-color: var(--glass-edge);
     background: var(--color-glass);
-    box-shadow: var(--glass-shadow-inset);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    box-shadow: var(--glass-shadow-inset), var(--glass-shadow);
+    /* Keep the standard property after the fallback so the production CSS keeps both. */
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
+      contrast(var(--glass-contrast));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate))
+      contrast(var(--glass-contrast));
+  }
+
+  .glass-chrome::after {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    border: 1px solid var(--glass-edge);
+    border-radius: inherit;
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+    content: "";
+    pointer-events: none;
+  }
+
+  .glass-chrome > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .glass-sidebar {
+    background: var(--color-glass-sidebar);
+  }
+
+  .glass-topbar {
+    background: var(--color-glass-topbar);
+  }
+
+  .glass-popover {
+    background: var(--color-glass-popover);
+    box-shadow: var(--glass-shadow-inset), var(--glass-shadow-deep);
+  }
+
+  .glass-control {
+    border-color: var(--glass-edge);
+    background: var(--color-glass-control);
+    box-shadow: var(--glass-shadow-inset), var(--glass-shadow);
+  }
+
+  .glass-control[aria-expanded="true"] {
+    border-color: color-mix(in srgb, var(--color-accent) 58%, var(--glass-edge));
+    box-shadow: var(--glass-shadow-inset), var(--glass-shadow), 0 0 0 3px var(--color-accent-glow);
   }
 
   .glass-hero {
@@ -452,6 +514,11 @@ button:not(:disabled),
   .input {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+  }
+
+  .glass-chrome {
+    background: var(--color-panel);
+    box-shadow: var(--app-shadow);
   }
 }
 

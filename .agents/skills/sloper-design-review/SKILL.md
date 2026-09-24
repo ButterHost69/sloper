@@ -1,6 +1,6 @@
 ---
 name: sloper-design-review
-description: Evaluate the Sloper console against its Apple-like glass design guide with static checks, Chrome MCP screenshots, and a concise scorecard.
+description: Evaluate the Sloper console against its Apple-inspired Liquid Glass design guide with static checks, Chrome MCP screenshots, and a concise scorecard.
 ---
 
 # Sloper design review
@@ -52,13 +52,15 @@ Use Chrome MCP to compare the current UI with:
 - [OpenDesign glassmorphism guide](https://github.com/nexu-io/open-design/tree/main/design-systems/glassmorphism)
 - [OpenDesign Apple guide](https://github.com/nexu-io/open-design/tree/main/design-systems/apple)
 
-The comparison is about restraint, not copying Apple product content:
+The comparison is about restraint and material behavior, not copying Apple product content:
 
 - The canvas should be solid Apple gray/white/black rather than an ambient blue-violet wash.
-- Glass should be concentrated in the shell, menus, sticky chrome, and temporary overlays.
+- Liquid Glass should be concentrated in the shell, menus, sticky chrome, temporary overlays, and floating selectors/status capsules; each should show a translucent fill, blur/saturation depth, a light-catching edge, and a soft floating shadow.
+- The sidebar, top bar, and popover may use distinct opacity tokens so they read as a physical stack, but no component should stack a second translucent utility background over the recipe.
 - Data panels should be solid and quiet.
 - Blue should be scarce and reserved for actions, links, focus, and selection.
 - Borders and surface steps should do most of the depth work; shadows should remain soft and occasional.
+- The expanded brand lockup should contain only the raven mark and lowercase `sloper`; the collapsed rail should show the raven alone.
 - No single screenshot should be accepted if it looks like a generic neon glass dashboard.
 
 ## Scorecard
@@ -68,7 +70,7 @@ Report:
 | Area | Weight | Pass condition |
 | --- | ---: | --- |
 | Foundations and tokens | 25 | Required semantic tokens and no ambient gradient tokens |
-| Glass placement | 25 | Glass is visible in chrome/overlays, not every content card |
+| Glass placement | 25 | Liquid Glass is visible in chrome/overlays, not every content card, and its edge/depth recipe is legible |
 | Hierarchy and rhythm | 20 | Solid surfaces, clear type hierarchy, restrained blue and shadows |
 | Accessibility | 20 | Focus, contrast, keyboard drawer behavior, reduced motion/transparency |
 | Responsive behavior | 10 | Mobile drawer and dense data remain usable at 390px |

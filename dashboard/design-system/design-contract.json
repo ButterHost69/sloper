@@ -1,10 +1,11 @@
 {
   "name": "sloper-apple-glass",
-  "version": 1,
-  "description": "Static contract for Sloper's quiet Apple-like glass operator console.",
+  "version": 2,
+  "description": "Static contract for Sloper's quiet Apple-inspired Liquid Glass operator console.",
   "requiredFiles": [
     "dashboard/frontend/app/globals.css",
     "dashboard/frontend/components/app-shell.tsx",
+    "dashboard/frontend/components/raven-logo.tsx",
     "dashboard/frontend/components/ui.tsx",
     "dashboard/frontend/app/page.tsx"
   ],
@@ -20,13 +21,25 @@
     "--color-ink-faint",
     "--color-accent",
     "--color-glass",
+    "--color-glass-sidebar",
+    "--color-glass-topbar",
+    "--color-glass-popover",
+    "--color-glass-control",
     "--glass-blur",
+    "--glass-saturate",
+    "--glass-contrast",
+    "--glass-edge",
+    "--glass-shadow",
     "--ease-standard"
   ],
   "requiredCssSelectors": [
     ".panel",
     ".panel-hover",
     ".glass-chrome",
+    ".glass-sidebar",
+    ".glass-topbar",
+    ".glass-popover",
+    ".glass-control",
     ".glass-hero",
     ".chip",
     ".btn",
@@ -80,6 +93,11 @@
       "file": "dashboard/frontend/components/app-shell.tsx",
       "pattern": "aria-label",
       "reason": "Icon and compact controls need accessible names."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "RavenLogo",
+      "reason": "The shell brand mark must be the original raven logo."
     }
   ],
   "forbiddenComponentPatterns": [
@@ -90,6 +108,10 @@
     {
       "pattern": "text-\\[#",
       "reason": "Use semantic text tokens instead of hard-coded component text colors."
+    },
+    {
+      "pattern": "agent control",
+      "reason": "The sidebar should show the raven beside only the lowercase sloper wordmark."
     }
   ]
 }

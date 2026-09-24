@@ -22,9 +22,9 @@ import {
   Settings,
   Sparkles,
   Sun,
-  Workflow,
   X,
 } from 'lucide-react';
+import { RavenLogo } from '@/components/raven-logo';
 import { useInstances } from '@/components/instance-context';
 import { useHealth } from '@/components/health-context';
 import { safeHost } from '@/lib/instances';
@@ -219,7 +219,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         inert={!isDesktop && !mobileOpen}
         onKeyDown={handleDrawerKeyDown}
         className={clsx(
-          'glass-chrome fixed inset-y-0 left-0 z-50 flex flex-col border-r border-edge bg-panel/75 backdrop-blur-2xl transition-[width,transform] duration-200 ease-out',
+          'glass-chrome glass-sidebar fixed inset-y-0 left-0 z-50 flex flex-col border-r border-edge transition-[width,transform] duration-200 ease-out',
           rail ? 'w-20' : 'w-[252px]',
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
@@ -238,16 +238,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
             aria-label="Sloper home"
           >
-            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-accent-dim text-white shadow-[0_8px_24px_rgba(65,118,230,0.24)]">
-              <Workflow size={17} strokeWidth={2.25} />
-              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-panel bg-emerald" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center">
+              <RavenLogo size={32} />
             </span>
             {!rail && (
-              <span className="min-w-0">
-                <span className="block text-[15px] font-semibold leading-4 tracking-[-0.01em]">sloper</span>
-                <span className="block text-[10px] font-medium uppercase tracking-[0.16em] text-ink-faint">
-                  agent control
-                </span>
+              <span className="min-w-0 text-[15px] font-semibold leading-4 tracking-[-0.01em]">
+                sloper
               </span>
             )}
           </Link>
@@ -275,8 +271,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               ref={pickerButtonRef}
               onClick={() => setPickerOpen((value) => !value)}
               className={clsx(
-                'flex w-full items-center gap-2.5 rounded-xl border border-edge bg-panel-2 px-3 py-2.5 text-left transition hover:border-edge-2',
-                pickerOpen && 'border-accent-dim/60 bg-accent/[0.06]',
+                'glass-chrome glass-control flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition hover:border-edge-2',
+                pickerOpen && 'border-accent-dim/60',
               )}
               aria-expanded={pickerOpen}
               aria-controls="instance-picker-menu"
@@ -302,7 +298,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div
                 id="instance-picker-menu"
                 aria-label="Choose an instance"
-                className="glass-chrome absolute left-3 right-3 top-[70px] z-50 overflow-hidden rounded-2xl border border-edge-2 bg-panel/90 p-1.5 shadow-2xl"
+                className="glass-chrome glass-popover absolute left-3 right-3 top-[70px] z-50 overflow-hidden rounded-2xl border border-edge-2 p-1.5"
               >
                 {instances.length === 0 && (
                   <p className="px-3 py-3 text-xs leading-5 text-ink-faint">
@@ -422,7 +418,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Settings size={16} />
             </Link>
           ) : (
-            <div className="rounded-xl border border-edge bg-panel-2 p-3">
+            <div className="glass-chrome glass-control rounded-xl border p-3">
               <div className="flex items-center gap-2">
                 <span
                   className={clsx(
@@ -459,7 +455,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <header
           inert={!isDesktop && mobileOpen}
-          className="glass-chrome sticky top-0 z-30 flex h-16 items-center border-b border-edge bg-panel/65 px-4 backdrop-blur-2xl sm:px-6 lg:px-8"
+          className="glass-chrome glass-topbar sticky top-0 z-30 flex h-16 items-center border-b border-edge px-4 sm:px-6 lg:px-8"
         >
           <button
             ref={mobileMenuButtonRef}
@@ -483,7 +479,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-1.5">
             <Link
               href="/instances"
-              className="hidden h-9 items-center gap-2 rounded-lg border border-edge bg-panel px-3 text-xs text-ink-dim transition hover:border-edge-2 hover:text-ink sm:flex"
+              className="glass-chrome glass-control hidden h-9 items-center gap-2 rounded-full border px-3 text-xs text-ink-dim transition hover:border-edge-2 hover:text-ink sm:flex"
             >
               <span
                 className={clsx(

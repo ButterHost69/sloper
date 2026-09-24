@@ -4,7 +4,7 @@
 
 Sloper's console is an operator surface, not a marketing page. It borrows Apple's restraint, material cues, and information rhythm without copying Apple's product chrome or pretending to be an Apple product page.
 
-The design goal is **quiet glass**: translucent chrome where it helps navigation and focus, solid neutral surfaces for operational data, and imagery or state—not decorative gradients—carrying visual interest.
+The design goal is **quiet Liquid Glass**: translucent, refracting chrome where it helps navigation and focus, solid neutral surfaces for operational data, and imagery or state—not decorative gradients—carrying visual interest. The material should feel physically layered, not like a colored page wash.
 
 ## Apple reference observations
 
@@ -50,6 +50,12 @@ The sidebar and top bar should be legible and calm. Their translucency is for de
 
 Issue titles, run status, event messages, and health state carry the visual weight. Decorative effects must never reduce contrast or compete with status.
 
+### 6. Liquid Glass is a material, not a gradient
+
+The shell, sticky header, and temporary menus use the same layered material recipe: a translucent neutral fill, a strong blur with saturation and a small contrast lift, a one-pixel light-catching edge, and a soft shadow. The edge treatment comes from inset box shadows and a non-interactive pseudo-element; it does not come from a page-wide gradient or a rainbow sheen. The sidebar, top bar, and popover use slightly different opacity values so their depth reads as a stack of real surfaces.
+
+Keep the material quiet enough that text remains the darkest or lightest element. A glass surface should be recognizable by its edge, blur, and layered shadow even when the backdrop is a plain solid tone.
+
 ## Token contract
 
 The canonical tokens live in [`dashboard/frontend/app/globals.css`](../frontend/app/globals.css). The names are semantic; components should consume variables rather than repeat raw colors.
@@ -66,7 +72,16 @@ The canonical tokens live in [`dashboard/frontend/app/globals.css`](../frontend/
 | `--color-ink-dim` | `#424245` | `#d2d2d7` | Supporting text |
 | `--color-ink-faint` | `#6e6e73` | `#a1a1a6` | Metadata and captions |
 | `--color-accent` | `#0071e3` | `#2997ff` | Links, focus, active state |
-| `--color-glass` | translucent white | translucent graphite | Shell and overlay chrome |
+| `--color-glass` | translucent white | translucent graphite | Base Liquid Glass chrome |
+| `--color-glass-sidebar` | 62% white | 76% graphite | Persistent navigation rail |
+| `--color-glass-topbar` | 58% white | 70% black-graphite | Sticky header |
+| `--color-glass-popover` | 82% white | 88% graphite | Menus and temporary overlays |
+| `--color-glass-control` | 72% white | 80% graphite | Floating selectors and status capsules |
+| `--glass-blur` | `32px` | `32px` | Backdrop diffusion |
+| `--glass-saturate` | `180%` | `180%` | Backdrop color retention |
+| `--glass-contrast` | `108%` | `108%` | Subtle legibility lift |
+| `--glass-edge` | light specular edge | low-light specular edge | Inner highlight and containment |
+| `--glass-shadow` | soft neutral shadow | soft black shadow | Floating depth without glow |
 
 The complete machine-readable contract is [`design-contract.json`](design-contract.json).
 
@@ -75,7 +90,9 @@ The complete machine-readable contract is [`design-contract.json`](design-contra
 ### Shell and navigation
 
 - Use a 64px desktop header, a 20px collapsed rail, and a single accent indicator for the active route.
-- Use `glass-chrome` for the sidebar, header, popovers, and mobile drawer.
+- Use `glass-chrome glass-sidebar` for the persistent navigation rail, `glass-chrome glass-topbar` for the sticky header, `glass-chrome glass-popover` for menus and temporary overlays, and `glass-chrome glass-control` for floating selectors and status capsules.
+- Let the CSS material provide `blur`, `saturate`, `contrast`, inset edge light, and shadow; do not stack a second translucent utility background over it.
+- Keep the raven mark and the lowercase `sloper` wordmark as the only visible brand lockup; the collapsed rail shows the raven alone.
 - Keep navigation labels visible on mobile; never persist a desktop rail state into the mobile drawer.
 - Keep the drawer keyboard-contained and restore focus to its trigger on close.
 
@@ -84,6 +101,7 @@ The complete machine-readable contract is [`design-contract.json`](design-contra
 - Use `panel` for content. Default radius: 18px.
 - Use `panel-hover` only for cards that navigate or expose a meaningful action.
 - Use a solid surface, a quiet border, and at most one soft shadow. Do not put a gradient or glow behind every panel.
+- Let glass surfaces carry the blur and specular edge; let panels carry the data hierarchy.
 - Use `glass-hero` only when a single feature intentionally acts as a chapter or focal surface; it remains tonal, not a colored wash.
 
 ### Controls
@@ -121,6 +139,7 @@ The complete machine-readable contract is [`design-contract.json`](design-contra
 
 - Do not use ambient radial gradients as a general dashboard background.
 - Do not make every card translucent, glowing, or elevated.
+- Do not stack a translucent utility background on top of the `glass-chrome` recipe; tune the material token instead.
 - Do not use violet/blue gradients to imply depth in ordinary content.
 - Do not copy Apple product language, imagery, or product claims into Sloper.
 - Do not claim a planned capability is live.
@@ -134,4 +153,4 @@ Run the static contract check from the frontend package:
 npm run evaluate:design
 ```
 
-Then use Chrome MCP for a visual pass at 1440×900 and 390×844. The companion [`sloper-design-review`](../../.agents/skills/sloper-design-review/SKILL.md) skill describes the evidence and scorecard. A passing static check is necessary but not sufficient: the visual pass must confirm that the canvas is quiet, glass is limited to chrome, and operational data remains the foreground.
+The contract is versioned with the material recipe: it verifies the four glass surface variants, the blur/saturation/contrast tokens, the raven integration, and the no-gradient guard. Then use Chrome MCP for a visual pass at 1440×900 and 390×844. The companion [`sloper-design-review`](../../.agents/skills/sloper-design-review/SKILL.md) skill describes the evidence and scorecard. A passing static check is necessary but not sufficient: the visual pass must confirm that the canvas is quiet, the chrome has a visible physical edge and layered depth, and operational data remains the foreground.
