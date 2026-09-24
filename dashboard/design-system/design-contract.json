@@ -1,0 +1,129 @@
+{
+  "name": "sloper-apple-glass",
+  "version": 3,
+  "description": "Static contract for Sloper's quiet Apple-inspired Liquid Glass operator console.",
+  "requiredFiles": [
+    "dashboard/frontend/app/globals.css",
+    "dashboard/frontend/components/app-shell.tsx",
+    "dashboard/frontend/components/raven-logo.tsx",
+    "dashboard/frontend/components/ui.tsx",
+    "dashboard/frontend/app/page.tsx"
+  ],
+  "requiredCssTokens": [
+    "--color-base",
+    "--color-panel",
+    "--color-panel-2",
+    "--color-panel-3",
+    "--color-edge",
+    "--color-edge-2",
+    "--color-ink",
+    "--color-ink-dim",
+    "--color-ink-faint",
+    "--color-accent",
+    "--panel-highlight",
+    "--color-glass",
+    "--color-glass-sidebar",
+    "--color-glass-topbar",
+    "--color-glass-popover",
+    "--color-glass-control",
+    "--glass-blur",
+    "--glass-saturate",
+    "--glass-contrast",
+    "--glass-edge",
+    "--glass-shadow",
+    "--ease-standard"
+  ],
+  "requiredCssSelectors": [
+    ".panel",
+    ".panel-hover",
+    ".hit-target",
+    ".glass-chrome",
+    ".glass-sidebar",
+    ".glass-topbar",
+    ".glass-popover",
+    ".glass-control",
+    ".glass-hero",
+    ".chip",
+    ".btn",
+    ".btn-primary",
+    ".input",
+    ".surface-grid"
+  ],
+  "forbiddenCssPatterns": [
+    {
+      "pattern": "radial-gradient\\(",
+      "reason": "Apple's canvas uses solid tonal chapters rather than ambient radial gradients."
+    },
+    {
+      "pattern": "--ambient-",
+      "reason": "Ambient gradient tokens make ordinary dashboard surfaces look decorative."
+    }
+  ],
+  "discouragedCssPatterns": [
+    {
+      "pattern": "linear-gradient\\(",
+      "reason": "Linear gradients should be limited to loading/skeleton motion, not content surfaces."
+    }
+  ],
+  "requiredMarkers": [
+    {
+      "file": "dashboard/frontend/app/globals.css",
+      "pattern": "prefers-reduced-motion",
+      "reason": "Motion must have a reduced-motion path."
+    },
+    {
+      "file": "dashboard/frontend/app/globals.css",
+      "pattern": "prefers-reduced-transparency",
+      "reason": "Glass must have a reduced-transparency fallback."
+    },
+    {
+      "file": "dashboard/frontend/app/globals.css",
+      "pattern": ":focus-visible",
+      "reason": "Keyboard focus must remain visible."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "backdrop-blur",
+      "reason": "The shell should reserve actual glass treatment for chrome."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "inert",
+      "reason": "The mobile navigation drawer must be removed from the tab order when closed."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "aria-label",
+      "reason": "Icon and compact controls need accessible names."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "RavenLogo",
+      "reason": "The shell brand mark must be the original raven logo."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "createPortal",
+      "reason": "The instance picker must escape the sidebar stacking context."
+    },
+    {
+      "file": "dashboard/frontend/components/app-shell.tsx",
+      "pattern": "aria-live",
+      "reason": "Connection transitions must be announced to assistive technology."
+    }
+  ],
+  "forbiddenComponentPatterns": [
+    {
+      "pattern": "bg-\\[#",
+      "reason": "Use semantic surface tokens instead of hard-coded component backgrounds."
+    },
+    {
+      "pattern": "text-\\[#",
+      "reason": "Use semantic text tokens instead of hard-coded component text colors."
+    },
+    {
+      "pattern": "agent control",
+      "reason": "The sidebar should show the raven beside only the lowercase sloper wordmark."
+    }
+  ]
+}

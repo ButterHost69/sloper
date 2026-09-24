@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ExternalLink, KeyRound, Pencil, Plus, Server, Trash2, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { useInstances } from '@/components/instance-context';
@@ -8,7 +8,8 @@ import { api } from '@/lib/api';
 import { normalizeUrl } from '@/lib/instances';
 import { timeAgo, formatBytes } from '@/lib/format';
 import type { Health, RepoInfo } from '@/lib/types';
-import { Panel, PulseDot, SectionHeader } from '@/components/ui';
+import { Panel, PulseDot, SectionHeader, EmptyState } from '@/components/ui';
+import { PageHeader } from '@/components/page-header';
 
 interface Probe {
   health: Health | null;
@@ -19,6 +20,7 @@ interface Probe {
 }
 
 function useProbe(url: string | undefined, intervalMs = 20000) {
+  const requestIdRef = useRef(0);
   const [probe, setProbe] = useState<Probe>({
     health: null,
     repo: null,
@@ -28,6 +30,7 @@ function useProbe(url: string | undefined, intervalMs = 20000) {
   });
 
   const check = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     if (!url) {
       setProbe((p) => ({ ...p, loading: false }));
       return;
@@ -35,8 +38,10 @@ function useProbe(url: string | undefined, intervalMs = 20000) {
     setProbe((p) => ({ ...p, loading: true }));
     try {
       const [health, repo] = await Promise.all([api.health(url), api.repo(url)]);
+      if (requestId !== requestIdRef.current) return;
       setProbe({ health, repo, loading: false, error: null, lastChecked: Date.now() });
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setProbe({
         health: null,
         repo: null,
@@ -73,7 +78,13 @@ function InstanceCard({
   onEdit: () => void;
   onRemove: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
+  const cancelRemoveRef = useRef<HTMLButtonElement>(null);
   const { probe, check } = useProbe(url);
+
+  useEffect(() => {
+    if (confirming) cancelRemoveRef.current?.focus();
+  }, [confirming]);
   const ok = !!probe.health;
 
   return (
@@ -83,8 +94,8 @@ function InstanceCard({
         isActive && 'border-accent/40 shadow-[0_0_0_1px_rgba(52,211,153,0.25),0_8px_30px_rgba(0,0,0,0.35)]',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div
             className={clsx(
               'flex h-10 w-10 items-center justify-center rounded-lg border',
@@ -99,25 +110,64 @@ function InstanceCard({
               <XCircle size={17} />
             )}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="font-semibold text-ink">{name}</p>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate font-semibold text-ink">{name}</p>
               {isActive && (
                 <span className="chip !text-[0.58rem] !text-accent !border-accent/40 !bg-accent/10">
                   active
                 </span>
               )}
             </div>
-            <p className="mt-0.5 font-mono text-xs text-ink-faint">{url}</p>
+            <p className="mt-0.5 truncate font-mono text-xs text-ink-faint">{url}</p>
           </div>
         </div>
-        <div className="flex gap-1">
-          <button className="btn btn-ghost !p-2" onClick={onEdit} title="Edit">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {!isActive && (
+            <button type="button" className="btn !min-h-8 !px-2.5 !py-1.5 text-[11px]" onClick={onActivate}>
+              Use instance
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-ghost !p-2"
+            onClick={onEdit}
+            title="Edit"
+            aria-label={`Edit ${name}`}
+          >
             <Pencil size={14} />
           </button>
-          <button className="btn btn-ghost !p-2" onClick={onRemove} title="Remove">
-            <Trash2 size={14} className="text-danger" />
-          </button>
+          {confirming ? (
+            <div className="flex items-center gap-1 rounded-lg border border-danger/30 bg-danger/[0.06] p-1" role="alert">
+              <span className="px-1 text-[11px] text-ink-dim">Remove connection?</span>
+              <button
+                type="button"
+                ref={cancelRemoveRef}
+                className="btn btn-ghost !min-h-8 !px-2 !py-1 text-[11px]"
+                onClick={() => setConfirming(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn !min-h-8 !border-danger/40 !bg-danger/10 !px-2 !py-1 text-[11px] !text-danger"
+                onClick={onRemove}
+                aria-label={`Confirm removing ${name}`}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-ghost !p-2"
+              onClick={() => setConfirming(true)}
+              title="Remove"
+              aria-label={`Remove ${name}`}
+            >
+              <Trash2 size={14} className="text-danger" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -146,7 +196,7 @@ function InstanceCard({
             )}
             <button
               onClick={() => void check()}
-              className="ml-auto text-xs text-accent hover:underline"
+              className="hit-target ml-auto text-xs text-accent hover:underline"
             >
               re-check
             </button>
@@ -199,11 +249,11 @@ export default function InstancesPage() {
       setFormError('URL must be a valid http:// or https:// address.');
       return;
     }
-    const cleanToken = token.trim() || undefined;
+    const cleanToken = token.trim() || null;
     if (editing) {
       updateInstance(editing, { name: name.trim(), url: normalized, token: cleanToken });
     } else {
-      addInstance(name.trim(), normalized, cleanToken);
+      addInstance(name.trim(), normalized, cleanToken || undefined);
     }
     reset();
   };
@@ -219,26 +269,34 @@ export default function InstancesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Instances</h1>
-          <p className="mt-1 text-xs text-ink-faint">
-            Point the console at one or more running sloper web servers.
-          </p>
-        </div>
-        <button className="btn btn-primary" onClick={() => { reset(); setShowForm((v) => !v); }}>
-          <Plus size={14} /> {showForm ? 'Close' : 'Add instance'}
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Instances"
+        title="Instances"
+        subtitle="Point the console at one or more running sloper web servers."
+        actions={
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              reset();
+              setShowForm((v) => !v);
+            }}
+          >
+            <Plus size={14} /> {showForm ? 'Close' : 'Add instance'}
+          </button>
+        }
+      />
 
       {showForm && (
         <Panel>
           <form onSubmit={submit} className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
               <div>
-                <label className="label">Name</label>
+                <label className="label" htmlFor="instance-name">Name</label>
                 <input
+                  id="instance-name"
                   className="input"
+                  aria-invalid={Boolean(formError)}
+                  aria-describedby={formError ? 'instance-form-error' : undefined}
                   placeholder="e.g. Staging"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -246,9 +304,12 @@ export default function InstancesPage() {
                 />
               </div>
               <div>
-                <label className="label">Base URL</label>
+                <label className="label" htmlFor="instance-url">Base URL</label>
                 <input
+                  id="instance-url"
                   className="input mono"
+                  aria-invalid={Boolean(formError)}
+                  aria-describedby={formError ? 'instance-form-error' : undefined}
                   placeholder="http://localhost:8080"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
@@ -257,10 +318,11 @@ export default function InstancesPage() {
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className="label flex items-center gap-1.5">
+                <label className="label flex items-center gap-1.5" htmlFor="instance-token">
                   <KeyRound size={12} className="text-ink-faint" /> Bearer token (optional)
                 </label>
                 <input
+                  id="instance-token"
                   type="password"
                   className="input mono"
                   placeholder="SLOPER_WEB_TOKEN if the server requires one"
@@ -271,7 +333,7 @@ export default function InstancesPage() {
               </div>
             </div>
             {formError && (
-              <p className="flex items-center gap-1.5 text-xs text-danger">
+              <p id="instance-form-error" role="alert" className="flex items-center gap-1.5 text-xs text-danger">
                 <XCircle size={13} /> {formError}
               </p>
             )}
@@ -303,10 +365,17 @@ export default function InstancesPage() {
       </div>
 
       {instances.length === 0 && (
-        <Panel>
-          <p className="py-8 text-center text-sm text-ink-dim">
-            No instances configured. Add your first sloper web server above.
-          </p>
+        <Panel bodyClassName="p-0">
+          <EmptyState
+            icon={<Server size={19} />}
+            title="No instances configured"
+            hint="Add your first Sloper web server to begin observing it."
+            action={
+              <button type="button" className="btn btn-primary mt-1" onClick={() => setShowForm(true)}>
+                <Plus size={14} /> Add instance
+              </button>
+            }
+          />
         </Panel>
       )}
 
@@ -317,7 +386,7 @@ export default function InstancesPage() {
             Each sloper instance ships a read-only JSON API backed by its own SQLite database. Start it
             wherever sloper is running:
           </p>
-          <pre className="mt-3 overflow-x-auto rounded-lg border border-edge bg-[#0c0c0f] p-4 font-mono text-xs leading-relaxed text-[#c9c9d4]">
+          <pre className="mt-3 overflow-x-auto rounded-lg border border-edge bg-base p-4 font-mono text-xs leading-relaxed text-ink-dim">
 {`# from a machine with access to the sloper database
 SLOPER_DB_PATH=/path/to/sloper.sqlite \\
 SLOPER_WEB_PORT=8080 \\

@@ -1,29 +1,51 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import clsx from 'clsx';
 import { Filter } from 'lucide-react';
 import { useInstanceData } from '@/hooks/use-instance-data';
 import { api } from '@/lib/api';
-import { ErrorState, Panel } from '@/components/ui';
+import { EmptyState, ErrorState, Panel, StaleDataNotice } from '@/components/ui';
+import { useInstances } from '@/components/instance-context';
+import { PageHeader } from '@/components/page-header';
 import { RunsView } from '@/components/runs-view';
 import type { RunRecord } from '@/lib/types';
 
-const STATUS_FILTERS = ['all', 'ongoing', 'failed'] as const;
+const STATUS_FILTERS = ['all', 'attention', 'running', 'completed', 'failed', 'interrupted'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
-const STAGES = ['all', 'spec', 'work', 'review', 'fix', 'merge'];
 
-// The runs page is a monitor: show only what's in flux.
-// ongoing = actually running; failed + interrupted = dead runs needing attention
-// (interrupted = killed when sloper stopped, recovered on next boot).
-const isOngoing = (status: string) => status === 'running';
-const isFailed = (status: string) => status === 'failed' || status === 'interrupted';
-const keepsList = (status: string) => isOngoing(status) || isFailed(status);
+const STATUS_LABELS: Record<StatusFilter, string> = {
+  all: 'All',
+  attention: 'Needs attention',
+  running: 'Running',
+  completed: 'Completed',
+  failed: 'Failed',
+  interrupted: 'Interrupted',
+};
+
+const STAGES = ['all', 'spec', 'work', 'review', 'fix', 'merge'];
+const PAGE_SIZE = 500;
+
+const isAttentionStatus = (status: string) => status === 'failed' || status === 'interrupted';
+
+function matchesStatus(runStatus: string, filter: StatusFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'attention') return isAttentionStatus(runStatus);
+  return runStatus === filter;
+}
 
 export default function RunsPage() {
   return (
-    <Suspense fallback={<div className="space-y-5"><div className="skeleton h-10 w-64" /><div className="skeleton h-96 w-full" /></div>}>
+    <Suspense
+      fallback={
+        <div className="space-y-5">
+          <div className="skeleton h-10 w-64" />
+          <div className="skeleton h-96 w-full" />
+        </div>
+      }
+    >
       <RunsPageInner />
     </Suspense>
   );
@@ -32,97 +54,225 @@ export default function RunsPage() {
 function RunsPageInner() {
   const searchParams = useSearchParams();
   const statusParam = searchParams.get('status') ?? 'all';
-  const [status, setStatus] = useState<StatusFilter>(
-    STATUS_FILTERS.includes(statusParam as StatusFilter) ? (statusParam as StatusFilter) : 'all',
-  );
+  const initialStatus = STATUS_FILTERS.includes(statusParam as StatusFilter)
+    ? (statusParam as StatusFilter)
+    : 'all';
+  const [status, setStatus] = useState<StatusFilter>(initialStatus);
   const [stage, setStage] = useState('all');
-  const { data, error, refresh } = useInstanceData((base) => api.runs(base, 1000), 15000);
+  const [olderRuns, setOlderRuns] = useState<RunRecord[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<Error | null>(null);
+  const [exhausted, setExhausted] = useState(false);
+  const { active } = useInstances();
+  const activeUrlRef = useRef(active?.url);
+  const { data, error, refresh } = useInstanceData(
+    (base) => api.runs(base, PAGE_SIZE),
+    15000,
+  );
 
-  // Keep the status filter in sync when the URL query param changes.
   useEffect(() => {
     setStatus(
-      STATUS_FILTERS.includes(statusParam as StatusFilter) ? (statusParam as StatusFilter) : 'all',
+      STATUS_FILTERS.includes(statusParam as StatusFilter)
+        ? (statusParam as StatusFilter)
+        : 'all',
     );
   }, [statusParam]);
 
-  const filtered = useMemo(() => {
-    const runs = data?.runs ?? [];
-    return runs.filter(
-      (r) =>
-        (status === 'all' ? keepsList(r.status) : status === 'ongoing' ? isOngoing(r.status) : isFailed(r.status)) &&
-        (stage === 'all' || r.stage === stage),
-    );
-  }, [data, status, stage]);
+  useEffect(() => {
+    activeUrlRef.current = active?.url;
+    setOlderRuns([]);
+    setMoreError(null);
+    setExhausted(false);
+    setLoadingMore(false);
+  }, [active?.url]);
 
-  const statusCounts = useMemo(() => {
-    let ongoing = 0;
-    let failed = 0;
-    for (const r of data?.runs ?? []) {
-      if (isOngoing(r.status)) ongoing++;
-      else if (isFailed(r.status)) failed++;
+  const hasMore = !exhausted && (data?.runs.length ?? 0) === PAGE_SIZE;
+
+  const runs = useMemo(() => {
+    const byId = new Map<number, RunRecord>();
+    for (const run of [...(data?.runs ?? []), ...olderRuns]) byId.set(run.id, run);
+    return [...byId.values()];
+  }, [data, olderRuns]);
+
+  const loadMore = async () => {
+    if (!active || loadingMore || !hasMore) return;
+    const requestUrl = active.url;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const cursor = runs[runs.length - 1]?.id;
+      if (!cursor) return;
+      const next = await api.runs(requestUrl, PAGE_SIZE, 0, cursor);
+      if (activeUrlRef.current !== requestUrl) return;
+      setOlderRuns((current) => [...current, ...next.runs]);
+      setExhausted(next.runs.length < PAGE_SIZE);
+    } catch (loadError) {
+      if (activeUrlRef.current === requestUrl) {
+        setMoreError(loadError instanceof Error ? loadError : new Error('Could not load older runs'));
+      }
+    } finally {
+      if (activeUrlRef.current === requestUrl) setLoadingMore(false);
     }
-    return { ongoing, failed, all: ongoing + failed };
-  }, [data]);
+  };
+
+  const filtered = useMemo(
+    () =>
+      runs.filter(
+        (run) =>
+          matchesStatus(run.status, status) &&
+          (stage === 'all' || run.stage === stage),
+      ),
+    [runs, status, stage],
+  );
+
+  const hasFilters = status !== 'all' || stage !== 'all';
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusFilter, number> = {
+      all: runs.length,
+      attention: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      interrupted: 0,
+    };
+    for (const run of runs) {
+      if (isAttentionStatus(run.status)) counts.attention += 1;
+      if (run.status in counts) counts[run.status as StatusFilter] += 1;
+    }
+    return counts;
+  }, [runs]);
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-ink">Runs</h1>
-        <p className="mt-1 text-xs text-ink-faint">
-          {filtered.length} in flight · completed runs hidden
-        </p>
+      <PageHeader
+        eyebrow="Runs"
+        title="Run history"
+        subtitle={`${filtered.length} shown · ${runs.length} loaded · ${statusCounts.running} running · ${statusCounts.failed} failed`}
+      />
+
+      <div className="space-y-3 rounded-xl border border-edge bg-panel p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter size={13} className="mr-1 text-ink-faint" />
+          <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            Status
+          </span>
+          {STATUS_FILTERS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setStatus(item)}
+              className={clsx(
+                'chip transition',
+                status === item
+                  ? '!border-accent/50 !bg-accent/10 !text-accent'
+                  : 'text-ink-dim hover:border-edge-2 hover:text-ink',
+              )}
+              aria-pressed={status === item}
+            >
+              {STATUS_LABELS[item]}
+              <span className="text-ink-faint">{statusCounts[item]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
+          <span className="mr-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            Stage
+          </span>
+          {STAGES.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setStage(item)}
+              className={clsx(
+                'chip transition',
+                stage === item
+                  ? '!border-accent/50 !bg-accent/10 !text-accent'
+                  : 'text-ink-dim hover:border-edge-2 hover:text-ink',
+              )}
+              aria-pressed={stage === item}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <div className="flex items-center gap-1.5">
-          <Filter size={13} className="text-ink-faint" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">Status</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {STATUS_FILTERS.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatus(s)}
-              className={clsx(
-                'chip transition',
-                status === s ? '!border-accent/50 !bg-accent/10 !text-accent' : 'hover:border-edge-2',
-              )}
-            >
-              {s}
-              <span className="text-ink-faint">{statusCounts[s] ?? 0}</span>
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto flex flex-wrap gap-1.5">
-          {STAGES.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStage(s)}
-              className={clsx(
-                'chip transition',
-                stage === s ? '!border-accent/50 !bg-accent/10 !text-accent' : 'hover:border-edge-2',
-              )}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      {error && data && <StaleDataNotice error={error} onRetry={refresh} label="run" />}
 
       {error && !data ? (
         <Panel>
           <ErrorState error={error} onRetry={refresh} />
         </Panel>
       ) : !data ? (
-        <Panel className="p-0">
-          <div className="space-y-3 p-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="skeleton h-12 w-full" />
-            ))}
-          </div>
-        </Panel>
+        active ? (
+          <Panel>
+            <div className="space-y-3">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div key={index} className="skeleton h-12 w-full" />
+              ))}
+            </div>
+          </Panel>
+        ) : (
+          <Panel bodyClassName="p-0">
+            <EmptyState
+              title="Connect an instance to inspect runs"
+              hint="Run history and captured agent output come from the read-only Sloper API."
+              action={
+                <Link href="/instances" className="btn btn-primary mt-1">
+                  Configure an instance
+                </Link>
+              }
+            />
+          </Panel>
+        )
       ) : (
-        <RunsView runs={filtered as RunRecord[]} />
+        <>
+          {filtered.length === 0 ? (
+            <Panel bodyClassName="p-0">
+              <EmptyState
+                title={runs.length ? 'No runs match these filters' : 'No runs yet'}
+                hint={
+                  runs.length
+                    ? 'Try another status or stage filter.'
+                    : 'Pipeline executions will show up here.'
+                }
+                action={
+                  hasFilters ? (
+                    <button
+                      type="button"
+                      className="btn mt-1"
+                      onClick={() => {
+                        setStatus('all');
+                        setStage('all');
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  ) : (
+                    <button type="button" className="btn mt-1" onClick={() => void refresh()}>
+                      Refresh instance
+                    </button>
+                  )
+                }
+              />
+            </Panel>
+          ) : (
+            <RunsView runs={filtered} />
+          )}
+          {(hasMore || loadingMore || moreError) && (
+            <div className="mt-3 flex flex-col items-center gap-2">
+              {moreError && <p className="text-xs text-danger">{moreError.message}</p>}
+              <button
+                type="button"
+                className="btn"
+                onClick={() => void loadMore()}
+                disabled={loadingMore || !hasMore}
+              >
+                {loadingMore ? 'Loading older runs…' : 'Load older runs'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

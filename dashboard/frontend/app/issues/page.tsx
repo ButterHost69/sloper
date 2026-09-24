@@ -9,7 +9,9 @@ import { api } from '@/lib/api';
 import { timeAgo, formatTime } from '@/lib/format';
 import { STAGES, stageMeta } from '@/lib/stages';
 import type { Issue } from '@/lib/types';
-import { EmptyState, ErrorState, Panel, Skeleton } from '@/components/ui';
+import { EmptyState, ErrorState, Panel, Skeleton, StaleDataNotice } from '@/components/ui';
+import { useInstances } from '@/components/instance-context';
+import { PageHeader } from '@/components/page-header';
 import { LabelChips, StageBadge } from '@/components/badges';
 import clsx from 'clsx';
 
@@ -18,7 +20,7 @@ function IssueRow({ issue }: { issue: Issue }) {
   return (
     <Link
       href={`/issues/${issue.number}`}
-      className="group grid grid-cols-12 items-center gap-3 border-b border-edge/60 px-4 py-3 transition hover:bg-white/[0.03]"
+      className="group grid grid-cols-12 items-center gap-3 border-b border-edge/60 px-4 py-3 transition hover:bg-panel-2/60"
     >
       <div className="col-span-12 flex items-center gap-2 sm:col-span-6">
         <span
@@ -72,6 +74,7 @@ export default function IssuesPage() {
 }
 
 function IssuesPageInner() {
+  const { active } = useInstances();
   const searchParams = useSearchParams();
   const stageParam = searchParams.get('stage') ?? 'all';
   const [query, setQuery] = useState('');
@@ -98,31 +101,42 @@ function IssuesPageInner() {
 
   // Stage counts come from the summary endpoint so chips stay accurate
   // regardless of the active search/filter.
-  const { data: summary } = useInstanceData((base) => api.summary(base), 15000);
+  const { data: summary, error: summaryError, refresh: refreshSummary } = useInstanceData(
+    (base) => api.summary(base),
+    15000,
+  );
   const totalIssues = summary?.issues?.total ?? 0;
   const counts = useMemo(() => summary?.issues?.by_stage ?? {}, [summary]);
 
   const shown = data?.issues.length ?? 0;
+  const hasFilters = Boolean(query.trim()) || stage !== 'all';
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Issues</h1>
-          <p className="mt-1 text-xs text-ink-faint">
+      <PageHeader
+        eyebrow="Issues"
+        title="Issues"
+        subtitle={
+          <>
             {totalIssues} total · {shown} shown
-          </p>
-        </div>
-        <div className="relative w-full max-w-xs">
-          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <input
-            className="input !pl-9"
-            placeholder="Search title, #number, author, label…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <div className="relative w-full lg:w-80">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"
+            />
+            <input
+              className="input !pl-9"
+              aria-label="Search issues"
+              placeholder="Search title, #number, author, label…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+        }
+      />
 
       {/* Stage filter chips */}
       <div className="flex flex-wrap gap-1.5">
@@ -132,6 +146,7 @@ function IssuesPageInner() {
             'chip transition',
             stage === 'all' ? '!border-accent/50 !bg-accent/10 !text-accent' : 'hover:border-edge-2',
           )}
+          aria-pressed={stage === 'all'}
         >
           All
           <span className="text-ink-faint">{totalIssues}</span>
@@ -142,6 +157,7 @@ function IssuesPageInner() {
             onClick={() => setStage(s.key)}
             className={clsx('chip transition', stage === s.key && '!border-accent/50 !bg-accent/10 !text-accent')}
             style={stage === s.key ? undefined : { color: s.color }}
+            aria-pressed={stage === s.key}
           >
             {s.label}
             <span className="text-ink-faint">{counts[s.key] ?? 0}</span>
@@ -149,22 +165,66 @@ function IssuesPageInner() {
         ))}
       </div>
 
+      {error && data && <StaleDataNotice error={error} onRetry={refresh} label="issue" />}
+      {summaryError && summary && (
+        <StaleDataNotice error={summaryError} onRetry={refreshSummary} label="summary" />
+      )}
+
       {error && !data ? (
         <Panel>
           <ErrorState error={error} onRetry={refresh} />
         </Panel>
       ) : !data ? (
-        <Panel className="p-0">
-          <div className="space-y-3 p-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
-        </Panel>
+        active ? (
+          <Panel className="p-0">
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </Panel>
+        ) : (
+          <Panel bodyClassName="p-0">
+            <EmptyState
+              title="Connect an instance to inspect issues"
+              hint="Issue stages, specs, and cached activity come from the read-only Sloper API."
+              action={
+                <Link href="/instances" className="btn btn-primary mt-1">
+                  Configure an instance
+                </Link>
+              }
+            />
+          </Panel>
+        )
       ) : (
-        <Panel className="overflow-hidden p-0">
+        <Panel className="overflow-hidden" bodyClassName="p-0">
           {data.issues.length === 0 ? (
-            <EmptyState title="No matching issues" hint="Adjust the search or filter." />
+            <EmptyState
+               title={hasFilters ? 'No matching issues' : 'No issues yet'}
+               hint={
+                 hasFilters
+                   ? 'Adjust the search or clear the stage filter.'
+                   : 'This instance is connected but has not recorded issues yet.'
+               }
+               action={
+                 hasFilters ? (
+                   <button
+                     type="button"
+                     className="btn mt-1"
+                     onClick={() => {
+                       setQuery('');
+                       setStage('all');
+                     }}
+                   >
+                     Clear filters
+                   </button>
+                 ) : (
+                   <button type="button" className="btn mt-1" onClick={() => void refresh()}>
+                     Refresh instance
+                   </button>
+                 )
+               }
+             />
           ) : (
             <div>
               <div className="grid grid-cols-12 gap-3 border-b border-edge bg-panel-2 px-4 py-2 text-[0.65rem] font-semibold uppercase tracking-wider text-ink-faint">
