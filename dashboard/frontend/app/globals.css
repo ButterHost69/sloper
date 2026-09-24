@@ -7,83 +7,79 @@
   --font-mono: "SF Mono", "SFMono-Regular", "Cascadia Code", "Roboto Mono",
     Consolas, "Liberation Mono", monospace;
 
-  --color-base: #eef6ff;
-  --color-panel: rgb(255 255 255 / 64%);
-  --color-panel-2: rgb(255 255 255 / 46%);
-  --color-panel-3: rgb(255 255 255 / 74%);
-  --color-edge: rgb(255 255 255 / 72%);
-  --color-edge-2: rgb(255 255 255 / 92%);
+  --color-base: #f5f5f7;
+  --color-panel: #ffffff;
+  --color-panel-2: #f5f5f7;
+  --color-panel-3: #ffffff;
+  --color-edge: #d2d2d7;
+  --color-edge-2: #86868b;
 
-  --color-ink: #102033;
-  --color-ink-dim: #34465f;
-  --color-ink-faint: #60708a;
+  --color-ink: #1d1d1f;
+  --color-ink-dim: #424245;
+  --color-ink-faint: #6e6e73;
 
-  --color-accent: #2563eb;
-  --color-accent-dim: #1856ff;
-  --color-accent-glow: rgb(79 140 255 / 28%);
+  --color-accent: #0071e3;
+  --color-accent-dim: #0071e3;
+  --color-accent-glow: rgb(0 113 227 / 14%);
 
-  --color-danger: #c92d45;
-  --color-warn: #9a5b00;
-  --color-info: #2563eb;
-  --color-violet: #7c3aed;
-  --color-fuchsia: #c026d3;
-  --color-sky: #0284c7;
+  --color-danger: #d70015;
+  --color-warn: #8a4b00;
+  --color-info: #0071e3;
+  --color-violet: #5e5ce6;
+  --color-fuchsia: #b52d8d;
+  --color-sky: #0071e3;
   --color-emerald: #147a43;
-  --color-amber: #b45309;
+  --color-amber: #8a4b00;
 }
 
 :root {
   color-scheme: light;
-  --app-shadow: 0 24px 80px rgb(79 140 255 / 16%);
-  --app-shadow-strong: 0 30px 90px rgb(79 140 255 / 24%);
-  --app-grid-line: rgb(255 255 255 / 36%);
+  --app-shadow: 0 8px 24px rgb(0 0 0 / 8%);
+  --app-shadow-strong: 0 12px 32px rgb(0 0 0 / 12%);
+  --app-grid-line: rgb(0 0 0 / 3%);
+  --color-glass: rgb(255 255 255 / 82%);
   --glass-blur: 24px;
-  --glass-saturate: 145%;
+  --glass-saturate: 120%;
   --glass-highlight: rgb(255 255 255 / 72%);
-  --glass-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 68%);
+  --glass-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 72%);
   --accent-hover: #0077ed;
   --accent-active: #0066cc;
-  --ambient-blue: rgb(79 140 255 / 30%);
-  --ambient-violet: rgb(168 85 247 / 22%);
-  --ambient-white: rgb(255 255 255 / 76%);
-  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.28, 0, 0.22, 1);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-base: #0c1020;
-  --color-panel: rgb(25 32 56 / 70%);
-  --color-panel-2: rgb(35 44 73 / 54%);
-  --color-panel-3: rgb(46 57 91 / 76%);
-  --color-edge: rgb(255 255 255 / 14%);
-  --color-edge-2: rgb(255 255 255 / 24%);
+  --color-base: #000000;
+  --color-panel: #1d1d1f;
+  --color-panel-2: #262629;
+  --color-panel-3: #2a2a2c;
+  --color-edge: #424245;
+  --color-edge-2: #6e6e73;
 
-  --color-ink: #f4f7ff;
-  --color-ink-dim: #c7d2e9;
-  --color-ink-faint: #9aa8c7;
+  --color-ink: #f5f5f7;
+  --color-ink-dim: #d2d2d7;
+  --color-ink-faint: #a1a1a6;
 
-  --color-accent: #7aaaff;
-  --color-accent-dim: #4f8cff;
-  --color-accent-glow: rgb(79 140 255 / 24%);
-  --color-danger: #fda4af;
-  --color-warn: #f5c46b;
-  --color-info: #7aaaff;
+  --color-accent: #2997ff;
+  --color-accent-dim: #0071e3;
+  --color-accent-glow: rgb(41 151 255 / 18%);
+  --color-danger: #ff6b6b;
+  --color-warn: #f5c26b;
+  --color-info: #2997ff;
   --color-violet: #b69aff;
   --color-fuchsia: #e9a3f5;
   --color-sky: #7dd3fc;
   --color-emerald: #6ee7a0;
   --color-amber: #fbbf6a;
 
-  --app-shadow: 0 24px 80px rgb(0 0 0 / 34%);
-  --app-shadow-strong: 0 30px 100px rgb(0 0 0 / 48%);
-  --app-grid-line: rgb(255 255 255 / 4%);
-  --glass-highlight: rgb(255 255 255 / 16%);
+  --app-shadow: 0 12px 32px rgb(0 0 0 / 32%);
+  --app-shadow-strong: 0 18px 42px rgb(0 0 0 / 42%);
+  --app-grid-line: rgb(255 255 255 / 3%);
+  --color-glass: rgb(29 29 31 / 84%);
+  --glass-highlight: rgb(255 255 255 / 12%);
   --glass-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 10%);
-  --accent-hover: #7aaaff;
-  --accent-active: #4f8cff;
-  --ambient-blue: rgb(79 140 255 / 20%);
-  --ambient-violet: rgb(168 85 247 / 16%);
-  --ambient-white: rgb(44 62 112 / 30%);
+  --accent-hover: #2997ff;
+  --accent-active: #0071e3;
 }
 
 html {
@@ -94,11 +90,7 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(circle at 10% 4%, var(--ambient-blue), transparent 32rem),
-    radial-gradient(circle at 90% 2%, var(--ambient-violet), transparent 30rem),
-    radial-gradient(circle at 52% 100%, var(--ambient-white), transparent 38rem),
-    var(--color-base);
+  background: var(--color-base);
   background-attachment: fixed;
   color: var(--color-ink);
   font-family: var(--font-sans);
@@ -156,27 +148,13 @@ button:not(:disabled),
     position: relative;
     isolation: isolate;
     border: 1px solid var(--color-edge);
-    border-radius: 20px;
-    background: color-mix(in srgb, var(--color-panel) 92%, transparent);
-    box-shadow: var(--app-shadow), var(--glass-shadow-inset);
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    border-radius: 18px;
+    background: var(--color-panel);
+    box-shadow: var(--app-shadow);
   }
 
   .panel::before {
-    position: absolute;
-    z-index: -1;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(
-      135deg,
-      var(--glass-highlight),
-      transparent 38%,
-      rgb(79 140 255 / 7%)
-    );
-    content: "";
-    pointer-events: none;
-    opacity: 0.72;
+    content: none;
   }
 
   .panel-hover {
@@ -189,23 +167,20 @@ button:not(:disabled),
 
   .panel-hover:hover {
     border-color: var(--color-edge-2);
-    box-shadow: var(--app-shadow-strong), var(--glass-shadow-inset);
-    transform: translateY(-2px);
+    box-shadow: var(--app-shadow-strong);
+    transform: translateY(-1px);
   }
 
   .glass-chrome {
     border-color: var(--color-edge);
-    background: color-mix(in srgb, var(--color-panel) 76%, transparent);
+    background: var(--color-glass);
     box-shadow: var(--glass-shadow-inset);
-    backdrop-filter: blur(28px) saturate(150%);
-    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   }
 
   .glass-hero {
-    background:
-      linear-gradient(135deg, rgb(255 255 255 / 42%), transparent 46%),
-      linear-gradient(315deg, rgb(79 140 255 / 13%), transparent 52%),
-      color-mix(in srgb, var(--color-panel) 90%, transparent);
+    background: var(--color-panel);
   }
 
   .chip {
@@ -215,14 +190,12 @@ button:not(:disabled),
     min-height: 1.5rem;
     border: 1px solid var(--color-edge);
     border-radius: 9999px;
-    background: color-mix(in srgb, var(--color-panel-2) 74%, transparent);
+    background: var(--color-panel-2);
     padding: 0.1rem 0.6rem;
     font-size: 0.7rem;
     font-weight: 500;
     line-height: 1.2;
     white-space: nowrap;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
   }
 
   .badge {
@@ -244,15 +217,13 @@ button:not(:disabled),
     justify-content: center;
     gap: 0.45rem;
     border: 1px solid var(--color-edge);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--color-panel-2) 78%, transparent);
+    border-radius: 980px;
+    background: var(--color-panel-2);
     color: var(--color-ink);
-    padding: 0.48rem 0.9rem;
+    padding: 0.48rem 0.95rem;
     font-size: 0.78rem;
     font-weight: 600;
-    box-shadow: var(--glass-shadow-inset);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    box-shadow: none;
     transition:
       border-color 180ms var(--ease-standard),
       background-color 180ms var(--ease-standard),
@@ -263,8 +234,8 @@ button:not(:disabled),
 
   .btn:hover:not(:disabled) {
     border-color: var(--color-edge-2);
-    background: color-mix(in srgb, var(--color-panel-3) 84%, transparent);
-    box-shadow: 0 8px 24px rgb(79 140 255 / 10%), var(--glass-shadow-inset);
+    background: var(--color-panel-3);
+    box-shadow: none;
     transform: translateY(-1px);
   }
 
@@ -281,14 +252,14 @@ button:not(:disabled),
     border-color: transparent;
     background: var(--color-accent-dim);
     color: #ffffff;
-    box-shadow: 0 10px 24px rgb(24 86 255 / 20%), var(--glass-shadow-inset);
+    box-shadow: 0 6px 16px rgb(0 113 227 / 14%);
   }
 
   .btn-primary:hover:not(:disabled) {
     border-color: transparent;
     background: var(--accent-hover);
     color: #ffffff;
-    box-shadow: 0 14px 30px rgb(24 86 255 / 28%), var(--glass-shadow-inset);
+    box-shadow: 0 8px 20px rgb(0 113 227 / 18%);
   }
 
   .btn-primary:active:not(:disabled) {
@@ -314,13 +285,11 @@ button:not(:disabled),
     min-height: 2.55rem;
     border: 1px solid var(--color-edge);
     border-radius: 12px;
-    background: color-mix(in srgb, var(--color-panel-2) 78%, transparent);
+    background: var(--color-panel-2);
     padding: 0.55rem 0.8rem;
     color: var(--color-ink);
     outline: none;
-    box-shadow: var(--glass-shadow-inset);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    box-shadow: none;
     transition:
       border-color 180ms var(--ease-standard),
       box-shadow 180ms var(--ease-standard),
@@ -337,8 +306,8 @@ button:not(:disabled),
 
   .input:focus {
     border-color: var(--color-accent);
-    background: color-mix(in srgb, var(--color-panel) 88%, transparent);
-    box-shadow: 0 0 0 4px var(--color-accent-glow), var(--glass-shadow-inset);
+    background: var(--color-panel);
+    box-shadow: 0 0 0 4px var(--color-accent-glow);
   }
 
   .label {
@@ -377,25 +346,20 @@ button:not(:disabled),
   }
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: -450px 0;
-  }
+@keyframes skeleton-pulse {
+  0%,
   100% {
-    background-position: 450px 0;
+    opacity: 0.52;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
 .skeleton {
   border-radius: 12px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--color-panel-2) 80%, transparent) 25%,
-    color-mix(in srgb, var(--color-panel-3) 88%, transparent) 37%,
-    color-mix(in srgb, var(--color-panel-2) 80%, transparent) 63%
-  );
-  background-size: 900px 100%;
-  animation: shimmer 1.55s linear infinite;
+  background: var(--color-panel-2);
+  animation: skeleton-pulse 1.55s ease-in-out infinite;
 }
 
 @keyframes fade-up {
@@ -414,19 +378,11 @@ button:not(:disabled),
 }
 
 .surface-grid {
-  background-color: color-mix(in srgb, var(--color-panel) 72%, transparent);
-  background-image:
-    linear-gradient(var(--app-grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--app-grid-line) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background: var(--color-panel);
 }
 
 .glass-hero.surface-grid {
-  background-image:
-    linear-gradient(135deg, rgb(255 255 255 / 42%), transparent 46%),
-    linear-gradient(315deg, rgb(79 140 255 / 13%), transparent 52%),
-    linear-gradient(var(--app-grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--app-grid-line) 1px, transparent 1px);
+  background: var(--color-panel);
 }
 
 .prose-dark {

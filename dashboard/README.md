@@ -27,7 +27,7 @@ sloper instance's read-only JSON API, which is served by the small Go server in
 
 ## Visual language
 
-The console uses a restrained Apple-like glass system: pale neutral canvases, one blue action accent, translucent layered surfaces, luminous hairlines, soft elevation, capsule controls, and strong ease-out motion. It follows the token-first and accessibility guidance in the OpenDesign [glassmorphism design system](https://github.com/nexu-io/open-design/tree/main/design-systems/glassmorphism) and the precision/contrast rules in its [Apple design system](https://github.com/nexu-io/open-design/tree/main/design-systems/apple). Dark mode keeps the same semantic token roles rather than introducing a second visual language.
+The console uses a restrained Apple-like glass system: pale neutral canvases, one blue action accent, translucent layered surfaces, luminous hairlines, soft elevation, capsule controls, and strong ease-out motion. It follows the token-first and accessibility guidance in the OpenDesign [glassmorphism design system](https://github.com/nexu-io/open-design/tree/main/design-systems/glassmorphism) and the precision/contrast rules in its [Apple design system](https://github.com/nexu-io/open-design/tree/main/design-systems/apple). Dark mode keeps the same semantic token roles rather than introducing a second visual language. The full contract, evaluation tool, and Chrome review skill live in [`design-system/`](design-system/) and [`.agents/skills/sloper-design-review/`](../../.agents/skills/sloper-design-review/).
 
 ## Views
 
