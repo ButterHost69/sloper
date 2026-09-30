@@ -21,7 +21,7 @@ func NewAgentGateway(opts models.AgentOptions) *AgentGateway {
 		opts.BinaryPath = "pi"
 	}
 	if opts.Timeout == 0 {
-		opts.Timeout = 10 * time.Minute
+		opts.Timeout = 24 * time.Hour
 	}
 	return &AgentGateway{opts: opts}
 }
