@@ -17,18 +17,20 @@ import (
 	"github.com/ButterHost69/sloper/internal/models"
 	"github.com/ButterHost69/sloper/internal/storage"
 	"github.com/ButterHost69/sloper/internal/version"
+	"github.com/ButterHost69/sloper/internal/worktree"
 )
 
 // webServer is the dashboard API server for a single sloper instance.
 // It exposes read-only JSON endpoints over the local sloper sqlite database.
 // The Next.js dashboard connects to one or more of these servers.
 type webServer struct {
-	db     *storage.Repositories
-	start  time.Time
-	repo   string
-	gitURL string
-	env    map[string]string
-	token  string
+	db          *storage.Repositories
+	start       time.Time
+	repo        string
+	gitURL      string
+	env         map[string]string
+	token       string
+	worktreeDir string
 }
 
 func main() {
@@ -62,11 +64,12 @@ func main() {
 	}
 
 	s := &webServer{
-		db:    storage.NewRepositories(db),
-		start: time.Now(),
-		repo:  envOr("SLOPER_REPO", detectRepoFromGit()),
-		env:   safeEnv(),
-		token: os.Getenv("SLOPER_WEB_TOKEN"),
+		db:          storage.NewRepositories(db),
+		start:       time.Now(),
+		repo:        envOr("SLOPER_REPO", detectRepoFromGit()),
+		env:         safeEnv(),
+		token:       os.Getenv("SLOPER_WEB_TOKEN"),
+		worktreeDir: worktreeDir(),
 	}
 	s.gitURL = detectRepoURL()
 
@@ -107,6 +110,7 @@ func (s *webServer) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/issues/{number}/runs", s.handleIssueRuns)
 	mux.HandleFunc("GET /api/issues/{number}/events", s.handleIssueEvents)
 	mux.HandleFunc("GET /api/pulls", s.handlePulls)
+	mux.HandleFunc("GET /api/worktrees", s.handleWorktrees)
 	mux.HandleFunc("GET /api/runs", s.handleRuns)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("GET /api/metrics/activity", s.handleActivity)
@@ -335,6 +339,70 @@ func (s *webServer) handlePulls(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"pulls": out, "count": len(out)})
 }
 
+// handleWorktrees reports the worktrees sloper is working in right now, plus
+// the issues that still have unmerged work.
+//
+// The directory listing is the source of truth for the first list. An agent
+// creates a worktree when its stage starts and deletes it when the stage ends,
+// while the database only learns the branch name after the agent has finished
+// — so a database-only view would be blind for the whole run.
+func (s *webServer) handleWorktrees(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	entries, err := worktree.Scan(s.worktreeDir)
+	if err != nil {
+		// An unreadable worktree directory should not take the console down.
+		fmt.Fprintln(os.Stderr, "web: scan worktrees:", err)
+		entries = nil
+	}
+
+	numbers := make([]int64, 0, len(entries))
+	liveBranches := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		if e.IssueNumber > 0 {
+			numbers = append(numbers, e.IssueNumber)
+		}
+		if e.Kind == worktree.KindWork || e.Kind == worktree.KindFix {
+			liveBranches[e.RelPath] = true
+		}
+	}
+
+	issues, err := s.db.GetWorktreeIssues(ctx, numbers)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	live := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		var issue *storage.WorktreeIssue
+		if e.IssueNumber > 0 {
+			if rec, ok := issues[e.IssueNumber]; ok {
+				issue = &rec
+			}
+		}
+		live = append(live, worktreeJSON(e.RelPath, string(e.Kind), true, e.ModTime, issue))
+	}
+
+	openRecords, err := s.db.ListOpenWorktreeIssues(ctx, 50)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	open := make([]map[string]any, 0, len(openRecords))
+	for _, it := range openRecords {
+		record := it
+		isLive := liveBranches[it.BranchName] || liveBranches[it.BranchName+worktree.FixSuffix]
+		open = append(open, worktreeJSON(it.BranchName, "work", isLive, time.Time{}, &record))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"base_dir": s.worktreeDir,
+		"live":     live,
+		"open":     open,
+	})
+}
+
 func (s *webServer) handleRuns(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	runs, err := s.db.ListRuns(r.Context(), limit, offset, queryInt64(r, "before_id"))
@@ -411,6 +479,40 @@ func prJSON(p storage.PRRecord) map[string]any {
 		"merged_at":      p.MergedAt,
 		"review_state":   p.ReviewState,
 		"last_review_at": p.LastReviewAt,
+	}
+}
+
+func worktreeJSON(relPath, kind string, live bool, mod time.Time, issue *storage.WorktreeIssue) map[string]any {
+	modTime := ""
+	if !mod.IsZero() {
+		modTime = mod.UTC().Format(time.RFC3339)
+	}
+	out := map[string]any{
+		"rel_path": relPath,
+		"kind":     kind,
+		"live":     live,
+		"mod_time": modTime,
+		"issue":    nil,
+	}
+	if issue != nil {
+		out["issue"] = worktreeIssueJSON(*issue)
+	}
+	return out
+}
+
+func worktreeIssueJSON(it storage.WorktreeIssue) map[string]any {
+	return map[string]any{
+		"number":          it.Number,
+		"title":           it.Title,
+		"state":           it.State,
+		"stage":           it.Stage,
+		"branch_name":     it.BranchName,
+		"pr_number":       it.PRNumber,
+		"pr_state":        it.PRState,
+		"pr_review_state": it.PRReviewState,
+		"updated_at":      it.UpdatedAt,
+		"run_stage":       it.RunStage,
+		"run_status":      it.RunStatus,
 	}
 }
 
@@ -501,6 +603,14 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// worktreeDir resolves where sloper keeps its worktrees. It matches the
+// manager the scheduler uses; SLOPER_WORKTREE_DIR is only needed when this
+// server's home directory differs from the one sloper ran under, as when the
+// two live in separate containers.
+func worktreeDir() string {
+	return envOr("SLOPER_WORKTREE_DIR", worktree.DefaultBaseDir())
 }
 
 // safeEnv returns sanitized agent/repo config, never exposing API keys.

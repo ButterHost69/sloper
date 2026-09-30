@@ -146,3 +146,40 @@ export interface IssueDetail {
   events: EventRecord[] | null;
   pr: PullRecord | null;
 }
+
+export type WorktreeKind = 'work' | 'review' | 'fix' | 'unknown';
+
+/** The issue a worktree belongs to, read from the database. */
+export interface WorktreeIssue {
+  number: number;
+  title: string;
+  state: string;
+  stage: string;
+  branch_name: string;
+  pr_number: number;
+  pr_state: string;
+  pr_review_state: string;
+  updated_at: string;
+  run_stage: string;
+  run_status: string;
+}
+
+/**
+ * One worktree. `rel_path` is relative to the instance's worktree directory,
+ * never absolute, so a remote console learns nothing about the host layout.
+ */
+export interface Worktree {
+  rel_path: string;
+  kind: WorktreeKind;
+  live: boolean;
+  mod_time: string;
+  issue: WorktreeIssue | null;
+}
+
+export interface WorktreesResponse {
+  base_dir: string;
+  /** Directories on disk right now — an agent is working in these. */
+  live: Worktree[];
+  /** Issues that still have unmerged work, live or not. */
+  open: Worktree[];
+}

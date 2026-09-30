@@ -9,6 +9,7 @@ import type {
   RepoInfo,
   RunRecord,
   Summary,
+  WorktreesResponse,
 } from './types';
 import { normalizeUrl, tokenFor } from './instances';
 
@@ -87,11 +88,12 @@ export const api = {
       base,
       `/api/pulls?limit=${limit}&offset=${offset}${beforeNumber ? `&before_number=${beforeNumber}` : ''}`,
     ),
+  worktrees: (base: string) => request<WorktreesResponse>(base, '/api/worktrees', 6000),
+  activity: (base: string, hours = 24) =>
+    request<{ hours: number; buckets: ActivityBucket[] }>(base, `/api/metrics/activity?hours=${hours}`),
   events: (base: string, limit = 300, offset = 0, beforeId?: number) =>
     request<{ events: EventRecord[]; count: number }>(
       base,
       `/api/events?limit=${limit}&offset=${offset}${beforeId ? `&before_id=${beforeId}` : ''}`,
     ),
-  activity: (base: string, hours = 24) =>
-    request<{ hours: number; buckets: ActivityBucket[] }>(base, `/api/metrics/activity?hours=${hours}`),
 };

@@ -393,7 +393,8 @@ SLOPER_WEB_PORT=8080 \\
   ./dist/sloper-web
 
 # defaults: ~/.sloper/sloper.sqlite on 127.0.0.1:8080
-# env: SLOPER_WEB_PORT, SLOPER_WEB_ADDR, SLOPER_DB_PATH, SLOPER_REPO
+# env: SLOPER_WEB_PORT, SLOPER_WEB_ADDR, SLOPER_DB_PATH, SLOPER_REPO,
+#      SLOPER_WORKTREE_DIR (only if it differs from ~/.sloper/worktrees)
 # optional auth: SLOPER_WEB_TOKEN=secret — add the same token to the form above`}
           </pre>
           <div className="mt-4 flex items-start gap-2 rounded-lg border border-edge bg-panel-2 p-3 text-xs text-ink-dim">

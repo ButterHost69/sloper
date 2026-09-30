@@ -42,6 +42,27 @@ The console uses a restrained Apple-inspired Liquid Glass system: solid pale neu
 | `/instances`   | Manage multiple sloper instances + health probes                     |
 | `/roadmap`     | Clearly labeled previews of planned loops, runners, and extensions    |
 
+## Worktrees
+
+The sidebar lists the worktrees the active instance is working in, split into
+**Working now** (a worktree directory exists) and **Open work** (an issue has a
+branch and a PR that is neither closed nor merged).
+
+Sloper creates a worktree when a stage starts and deletes it when the stage
+ends, so a directory on disk means an agent is in it at that moment. The
+database only learns the branch name once the agent has finished, so the API
+reads the instance's worktree directory and recovers the issue number from the
+directory name (`sloper/issue-42-null-pointer`, `review-42-pr-118`) before
+joining the database for the title and stage. Nothing is stored for this — the
+list is rebuilt on every request.
+
+A directory with no run behind it is flagged **orphaned**: the stage that
+created it was killed before its cleanup. Sloper removes these on the next
+start.
+
+Set `SLOPER_WORKTREE_DIR` when the API server's home directory differs from
+the one sloper ran under, as when the two live in separate containers.
+
 ## Running
 
 ```bash
@@ -91,6 +112,7 @@ GET /api/issues/{n}/comments   comments
 GET /api/issues/{n}/runs       pipeline runs
 GET /api/issues/{n}/events     event log for the issue
 GET /api/pulls                 cached pull requests (?limit, ?offset, ?before_number)
+GET /api/worktrees              worktree directories on disk + issues with unmerged work
 GET /api/runs                  run history (?limit, ?offset, ?before_id)
 GET /api/events                audit log (?limit, ?offset, ?before_id)
 GET /api/metrics/activity      activity buckets for charts (?hours=24)
