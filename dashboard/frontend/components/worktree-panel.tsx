@@ -8,7 +8,7 @@ import { useInstances } from '@/components/instance-context';
 import { useInstanceData } from '@/hooks/use-instance-data';
 import { api } from '@/lib/api';
 import { stageMeta } from '@/lib/stages';
-import { PulseDot, Skeleton } from '@/components/ui';
+import { PulseDot } from '@/components/ui';
 import type { Worktree, WorktreeIssue, WorktreeKind, WorktreesResponse } from '@/lib/types';
 
 const KIND_META: Record<WorktreeKind, { label: string; color: string }> = {
@@ -22,6 +22,9 @@ const KIND_META: Record<WorktreeKind, { label: string; color: string }> = {
 const BUSY_INTERVAL_MS = 5000;
 const IDLE_INTERVAL_MS = 30000;
 
+/** An instance can hold many unmerged PRs; the sidebar shows the recent ones. */
+const MAX_ROWS = 8;
+
 interface Row {
   key: string;
   issue: WorktreeIssue | null;
@@ -31,94 +34,86 @@ interface Row {
   orphaned: boolean;
 }
 
-/**
- * One issue can hold several worktrees at once — a review checkout alongside
- * the work checkout, say — so live entries collapse onto a single row per
- * issue. Directories sloper did not name keep a row of their own.
- */
-function toRows(entries: Worktree[]): Row[] {
-  const rows: Row[] = [];
-  const byIssue = new Map<number, Row>();
-
-  for (const wt of entries) {
-    const issue = wt.issue;
+function toRow(wt: Worktree, seen: Set<number>): Row | null {
+  const issue = wt.issue;
+  if (issue) {
+    if (seen.has(issue.number)) return null;
+    seen.add(issue.number);
+  }
+  return {
+    key: issue ? `issue:${issue.number}` : `wt:${wt.rel_path}`,
+    issue,
+    kinds: [wt.kind],
+    relPath: wt.rel_path,
+    live: wt.live,
     // A directory with no run behind it survived a hard kill: the stage that
     // created it never reached its deferred cleanup.
-    const orphaned = wt.live && issue?.run_status !== 'running';
+    orphaned: wt.live && issue?.run_status !== 'running',
+  };
+}
 
-    if (!issue) {
-      rows.push({
-        key: `wt:${wt.rel_path}`,
-        issue: null,
-        kinds: [wt.kind],
-        relPath: wt.rel_path,
-        live: wt.live,
-        orphaned,
-      });
-      continue;
-    }
+/**
+ * One list, not two. An issue usually appears in both the live directories and
+ * the unmerged-work query, so it gets a single row; the dot says whether an
+ * agent is in it right now. Work in flight leads, because that is what changes
+ * minute to minute — an issue being worked on has no branch or PR yet, which is
+ * exactly the window a database-only list cannot show.
+ */
+function toRows(data: WorktreesResponse): Row[] {
+  const seen = new Set<number>();
+  const rows: Row[] = [];
 
-    const existing = byIssue.get(issue.number);
+  for (const wt of data.live) {
+    const row = toRow(wt, seen);
+    if (row) rows.push(row);
+  }
+  for (const wt of data.open) {
+    const row = toRow(wt, seen);
+    if (!row) continue;
+    // An issue can hold several worktrees at once — a review checkout beside
+    // the work checkout, say — so fold its kinds into the row already shown.
+    const existing = rows.find((r) => r.issue && row.issue && r.issue.number === row.issue.number);
     if (existing) {
       if (!existing.kinds.includes(wt.kind)) existing.kinds.push(wt.kind);
-      existing.orphaned = existing.orphaned && orphaned;
+      existing.live = existing.live || wt.live;
       continue;
     }
-    const row: Row = {
-      key: `issue:${issue.number}`,
-      issue,
-      kinds: [wt.kind],
-      relPath: wt.rel_path,
-      live: wt.live,
-      orphaned,
-    };
-    byIssue.set(issue.number, row);
     rows.push(row);
   }
   return rows;
 }
 
-function GroupLabel({ children, count }: { children: React.ReactNode; count: number }) {
-  return (
-    <div className="flex items-center justify-between px-2.5 pb-1 pt-3">
-      <span className="text-[0.6rem] font-semibold uppercase tracking-widest text-ink-faint">
-        {children}
-      </span>
-      {count > 0 && <span className="text-[0.6rem] tabular-nums text-ink-faint">{count}</span>}
-    </div>
-  );
-}
-
-function WorktreeRow({ row, showLive }: { row: Row; showLive: boolean }) {
+function WorktreeRow({ row, onNavigate }: { row: Row; onNavigate?: () => void }) {
   const issue = row.issue;
-  const stage = issue ? stageMeta(issue.stage) : null;
   const kinds = row.kinds.map((k) => KIND_META[k] ?? KIND_META.unknown);
+  const stage = issue ? stageMeta(issue.stage) : null;
   const dotColor = row.orphaned ? '#f87171' : kinds[0]?.color ?? '#94a3b8';
 
   const body = (
     <>
       <div className="flex items-center gap-2">
-        {showLive && row.live && (
-          <PulseDot color={dotColor} className="!h-1.5 !w-1.5 shrink-0" />
-        )}
-        <span className="shrink-0 text-[0.7rem] tabular-nums text-ink-faint">
+        <PulseDot
+          color={dotColor}
+          className={clsx('!h-1.5 !w-1.5 shrink-0', !row.live && 'opacity-40')}
+        />
+        <span className="shrink-0 text-[11px] tabular-nums text-ink-faint">
           {issue ? `#${issue.number}` : '—'}
         </span>
         <span
           className={clsx(
-            'min-w-0 flex-1 truncate text-xs',
-            row.orphaned ? 'text-ink-dim' : 'text-ink',
+            'min-w-0 flex-1 truncate text-[13px]',
+            row.live ? 'text-ink' : 'text-ink-dim',
           )}
         >
           {issue?.title ?? row.relPath}
         </span>
         {issue?.pr_number ? (
-          <span className="shrink-0 text-[0.6rem] tabular-nums text-ink-faint">
+          <span className="shrink-0 text-[10px] tabular-nums text-ink-faint">
             #{issue.pr_number}
           </span>
         ) : null}
       </div>
-      <div className="mt-1 flex items-center gap-1.5 overflow-hidden whitespace-nowrap pl-3.5 text-[0.65rem] text-ink-faint">
+      <div className="mt-0.5 flex items-center gap-1.5 overflow-hidden whitespace-nowrap pl-3.5 text-[11px] text-ink-faint">
         {kinds.map((kind) => (
           <span key={kind.label} style={{ color: kind.color }}>
             {kind.label}
@@ -142,12 +137,13 @@ function WorktreeRow({ row, showLive }: { row: Row; showLive: boolean }) {
   );
 
   if (!issue) {
-    return <div className="rounded-lg px-2.5 py-2">{body}</div>;
+    return <div className="rounded-lg px-3 py-1.5">{body}</div>;
   }
   return (
     <Link
       href={`/issues/${issue.number}`}
-      className="block rounded-lg px-2.5 py-2 transition hover:bg-white/[0.04]"
+      onClick={onNavigate}
+      className="block rounded-lg px-3 py-1.5 transition hover:bg-panel-2"
     >
       {body}
     </Link>
@@ -155,11 +151,11 @@ function WorktreeRow({ row, showLive }: { row: Row; showLive: boolean }) {
 }
 
 /**
- * The worktrees this instance is working in, plus the issues that still have
+ * The worktrees this instance is working in, and the issues that still have
  * unmerged work. Both come from the instance's own directory listing joined
  * with its database, so the browser never touches the filesystem.
  */
-export function WorktreePanel() {
+export function WorktreePanel({ onNavigate }: { onNavigate?: () => void }) {
   const { active } = useInstances();
   const [busy, setBusy] = useState(false);
   const { data, error, loading } = useInstanceData<WorktreesResponse>(
@@ -174,58 +170,40 @@ export function WorktreePanel() {
 
   if (!active) return null;
 
-  const liveRows = data ? toRows(data.live) : [];
-  const openRows = data ? toRows(data.open) : [];
-  const total = liveRows.length + openRows.length;
+  const rows = data ? toRows(data) : [];
+  const shown = rows.slice(0, MAX_ROWS);
+  const hidden = rows.length - shown.length;
 
   return (
-    <section className="border-t border-edge pt-1">
-      <div className="flex items-center gap-2 px-3 pb-1 pt-4">
-        <GitBranch size={13} className="text-ink-faint" />
-        <span className="flex-1 text-[0.65rem] font-semibold uppercase tracking-widest text-ink-faint">
+    <section className="mt-5 border-t border-edge pt-4">
+      <div className="mb-1.5 flex items-center gap-2 px-3">
+        <GitBranch size={13} className="shrink-0 text-ink-faint" />
+        <p className="flex-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-ink-faint">
           Worktrees
-        </span>
-        {total > 0 && (
-          <span className="rounded bg-white/[0.06] px-1.5 text-[0.65rem] tabular-nums text-ink-dim">
-            {total}
-          </span>
+        </p>
+        {rows.length > 0 && (
+          <span className="text-[10px] tabular-nums text-ink-faint">{rows.length}</span>
         )}
       </div>
 
-      {error && !data && (
-        <p className="px-3 py-1 text-[0.65rem] text-ink-faint">Worktrees unavailable.</p>
-      )}
+      {error && !data && <p className="px-3 py-1 text-[11px] text-ink-faint">Unavailable.</p>}
 
       {!data && loading && (
-        <div className="space-y-2 px-3 py-2">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-4/5" />
+        <div className="space-y-2 px-3 py-1.5">
+          <div className="skeleton h-8 w-full" />
+          <div className="skeleton h-8 w-4/5" />
         </div>
       )}
 
-      {data && total === 0 && (
-        <p className="px-3 py-1 text-[0.65rem] text-ink-faint">
-          Nothing in flight, no open worktrees.
-        </p>
+      {data && rows.length === 0 && (
+        <p className="px-3 py-1 text-[11px] text-ink-faint">Nothing in flight, none open.</p>
       )}
 
-      {liveRows.length > 0 && (
-        <>
-          <GroupLabel count={liveRows.length}>Working now</GroupLabel>
-          {liveRows.map((row) => (
-            <WorktreeRow key={row.key} row={row} showLive />
-          ))}
-        </>
-      )}
+      {shown.map((row) => (
+        <WorktreeRow key={row.key} row={row} onNavigate={onNavigate} />
+      ))}
 
-      {openRows.length > 0 && (
-        <>
-          <GroupLabel count={openRows.length}>Open work</GroupLabel>
-          {openRows.map((row) => (
-            <WorktreeRow key={row.key} row={row} showLive />
-          ))}
-        </>
-      )}
+      {hidden > 0 && <p className="px-3 pt-1.5 text-[11px] text-ink-faint">and {hidden} more</p>}
     </section>
   );
 }
