@@ -56,7 +56,7 @@ export function PipelineFunnel({ summary }: { summary: Summary }) {
           <div key={key} className="flex min-w-[92px] flex-1 items-center gap-1.5">
             <button
               onClick={() => router.push(`/issues?stage=${key}`)}
-              className="group flex-1 rounded-lg border border-edge bg-panel-2 p-2.5 text-left transition hover:border-edge-2 hover:bg-white/[0.03]"
+              className="group flex-1 rounded-lg border border-edge bg-panel-2 p-2.5 text-left transition hover:border-edge-2 hover:bg-panel-3"
             >
               <div className="flex items-center justify-between">
                 <span

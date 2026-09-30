@@ -1,4 +1,4 @@
-.PHONY: build-sloper format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean docker-clean-mem connect-docker
+.PHONY: build-sloper format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean docker-clean-mem connect-docker evaluate-design
 
 format-check:
 	gofmt -l .
@@ -61,5 +61,9 @@ run-dashboard: dashboard-install
 # Next.js dev server with hot reload.
 dev-dashboard: dashboard-install
 	cd dashboard/frontend && npm run dev
+
+# Check the console against the Sloper glass design contract.
+evaluate-design:
+	cd dashboard/frontend && npm run evaluate:design
 
 dashboard: build-web build-dashboard

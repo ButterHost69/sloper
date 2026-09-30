@@ -1,4 +1,5 @@
 import type {
+  ActivityBucket,
   CommentRecord,
   EventRecord,
   Health,
@@ -76,10 +77,21 @@ export const api = {
     request<IssueDetail>(base, `/api/issues/${number}`),
   comments: (base: string, number: number) =>
     request<{ comments: CommentRecord[] }>(base, `/api/issues/${number}/comments`),
-  runs: (base: string, limit = 500) =>
-    request<{ runs: RunRecord[]; count: number }>(base, `/api/runs?limit=${limit}`),
-  pulls: (base: string, limit = 500) =>
-    request<{ pulls: PullRecord[]; count: number }>(base, `/api/pulls?limit=${limit}`),
-  events: (base: string, limit = 300) =>
-    request<{ events: EventRecord[]; count: number }>(base, `/api/events?limit=${limit}`),
+  runs: (base: string, limit = 500, offset = 0, beforeId?: number) =>
+    request<{ runs: RunRecord[]; count: number }>(
+      base,
+      `/api/runs?limit=${limit}&offset=${offset}${beforeId ? `&before_id=${beforeId}` : ''}`,
+    ),
+  pulls: (base: string, limit = 500, offset = 0, beforeNumber?: number) =>
+    request<{ pulls: PullRecord[]; count: number }>(
+      base,
+      `/api/pulls?limit=${limit}&offset=${offset}${beforeNumber ? `&before_number=${beforeNumber}` : ''}`,
+    ),
+  events: (base: string, limit = 300, offset = 0, beforeId?: number) =>
+    request<{ events: EventRecord[]; count: number }>(
+      base,
+      `/api/events?limit=${limit}&offset=${offset}${beforeId ? `&before_id=${beforeId}` : ''}`,
+    ),
+  activity: (base: string, hours = 24) =>
+    request<{ hours: number; buckets: ActivityBucket[] }>(base, `/api/metrics/activity?hours=${hours}`),
 };

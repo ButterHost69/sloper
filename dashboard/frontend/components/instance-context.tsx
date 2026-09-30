@@ -20,12 +20,16 @@ import {
   saveInstances,
 } from '@/lib/instances';
 
+type InstancePatch = Partial<Pick<Instance, 'name' | 'url'>> & {
+  token?: string | null;
+};
+
 interface InstanceContextValue {
   instances: Instance[];
   active: Instance | null;
   setActive: (id: string) => void;
   addInstance: (name: string, url: string, token?: string) => Instance;
-  updateInstance: (id: string, patch: Partial<Pick<Instance, 'name' | 'url' | 'token'>>) => void;
+  updateInstance: (id: string, patch: InstancePatch) => void;
   removeInstance: (id: string) => void;
 }
 
@@ -68,7 +72,7 @@ export function InstanceProvider({ children }: { children: ReactNode }) {
   );
 
   const updateInstance = useCallback(
-    (id: string, patch: Partial<Pick<Instance, 'name' | 'url' | 'token'>>) => {
+    (id: string, patch: InstancePatch) => {
       persist(
         instances.map((i) =>
           i.id === id

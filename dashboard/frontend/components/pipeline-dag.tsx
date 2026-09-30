@@ -54,22 +54,11 @@ export function PipelineDAG({ stage }: { stage: string }) {
                 className={clsx(
                   'relative flex h-9 w-9 items-center justify-center rounded-full border transition-all',
                   state === 'done' && 'border-transparent',
-                  state === 'current' && 'border-transparent shadow-[0_0_16px]',
+                  state === 'current' && 'border-accent/50 bg-accent/10 text-accent shadow-[0_0_16px_rgba(65,118,230,0.22)]',
                   state === 'next' && 'border-edge-2',
                   state === 'failed' && 'border-danger/50 bg-danger/10 text-danger',
                 )}
-                style={
-                  state === 'done'
-                    ? { background: meta.color, color: '#04120c' }
-                    : state === 'current'
-                      ? {
-                          background: `${meta.color}22`,
-                          color: meta.color,
-                          borderColor: `${meta.color}66`,
-                          boxShadow: `0 0 18px ${meta.color}55`,
-                        }
-                      : undefined
-                }
+                style={state === 'done' ? { background: meta.color, color: '#04120c' } : undefined}
               >
                 {state === 'done' ? (
                   <Check size={15} strokeWidth={3} />
@@ -78,9 +67,7 @@ export function PipelineDAG({ stage }: { stage: string }) {
                 ) : state === 'failed' ? (
                   <AlertOctagon size={15} />
                 ) : (
-                  <span className="text-[0.6rem] font-bold" style={{ color: meta.color }}>
-                    {i + 1}
-                  </span>
+                  <span className="text-[0.6rem] font-bold text-ink-faint">{i + 1}</span>
                 )}
                 {state === 'current' && (
                   <span
@@ -92,9 +79,8 @@ export function PipelineDAG({ stage }: { stage: string }) {
               <span
                 className={clsx(
                   'mt-1.5 whitespace-nowrap text-[0.65rem] font-semibold',
-                  state === 'next' ? 'text-ink-faint' : 'text-ink-dim',
+                  state === 'next' ? 'text-ink-faint' : state === 'current' ? 'text-accent' : 'text-ink',
                 )}
-                style={state === 'done' || state === 'current' ? { color: meta.color } : undefined}
               >
                 {meta.label}
               </span>

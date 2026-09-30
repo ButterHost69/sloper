@@ -322,8 +322,8 @@ func (s *webServer) handleIssueEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webServer) handlePulls(w http.ResponseWriter, r *http.Request) {
-	limit, _ := pagination(r)
-	pulls, err := s.db.ListPRs(r.Context(), limit)
+	limit, offset := pagination(r)
+	pulls, err := s.db.ListPRs(r.Context(), limit, offset, queryInt64(r, "before_number"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -337,7 +337,7 @@ func (s *webServer) handlePulls(w http.ResponseWriter, r *http.Request) {
 
 func (s *webServer) handleRuns(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	runs, err := s.db.ListRuns(r.Context(), limit, offset)
+	runs, err := s.db.ListRuns(r.Context(), limit, offset, queryInt64(r, "before_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -347,7 +347,7 @@ func (s *webServer) handleRuns(w http.ResponseWriter, r *http.Request) {
 
 func (s *webServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	events, err := s.db.ListEvents(r.Context(), limit, offset)
+	events, err := s.db.ListEvents(r.Context(), limit, offset, queryInt64(r, "before_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -444,6 +444,15 @@ func pagination(r *http.Request) (limit, offset int) {
 		}
 	}
 	return
+}
+
+func queryInt64(r *http.Request, key string) int64 {
+	if value := r.URL.Query().Get(key); value != "" {
+		if n, err := strconv.ParseInt(value, 10, 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 0
 }
 
 func pathInt(w http.ResponseWriter, r *http.Request, key string) int64 {

@@ -3,10 +3,13 @@ import type { Instance } from './types';
 const STORAGE_KEY = 'sloper.instances.v1';
 export const ACTIVE_KEY = 'sloper.activeInstance.v1';
 
+const DEFAULT_INSTANCE_URL =
+  process.env.NEXT_PUBLIC_SLOPER_DEFAULT_URL?.trim() || 'http://localhost:8080';
+
 const DEFAULT_INSTANCE: Instance = {
   id: 'local',
   name: 'Local Sloper',
-  url: 'http://localhost:8080',
+  url: normalizeUrl(DEFAULT_INSTANCE_URL),
 };
 
 /**
@@ -33,7 +36,11 @@ export function loadInstances(): Instance[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [DEFAULT_INSTANCE];
     const parsed = JSON.parse(raw) as Instance[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return [DEFAULT_INSTANCE];
+    if (!Array.isArray(parsed)) return [DEFAULT_INSTANCE];
+    if (parsed.length === 0) {
+      registerTokens([]);
+      return [];
+    }
     registerTokens(parsed);
     return parsed;
   } catch {
