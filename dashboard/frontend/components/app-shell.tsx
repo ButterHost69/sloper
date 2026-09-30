@@ -28,6 +28,7 @@ import {
 import { RavenLogo } from '@/components/raven-logo';
 import { useInstances } from '@/components/instance-context';
 import { useHealth } from '@/components/health-context';
+import { WorktreePanel } from '@/components/worktree-panel';
 import { safeHost } from '@/lib/instances';
 import { timeAgo } from '@/lib/format';
 
@@ -480,6 +481,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           ))}
+
+          {/* Worktrees in flight and issues with unmerged work. It scrolls
+              with the nav so the instance footer below stays pinned. */}
+          {!rail && <WorktreePanel onNavigate={() => setMobileOpen(false)} />}
         </nav>
 
         <div className="shrink-0 border-t border-edge p-3">

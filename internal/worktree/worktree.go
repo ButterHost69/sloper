@@ -23,13 +23,20 @@ type Manager struct {
 	mu      sync.Mutex
 }
 
+// DefaultBaseDir is where worktrees live when no base dir is configured. The
+// dashboard API server resolves the same path so the console reports the
+// directories sloper actually uses.
+func DefaultBaseDir() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = os.TempDir()
+	}
+	return filepath.Join(homeDir, DefaultWorktreeDir)
+}
+
 func NewManager(baseDir string, gitGateway *git.GitGateway) *Manager {
 	if baseDir == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			homeDir = os.TempDir()
-		}
-		baseDir = filepath.Join(homeDir, DefaultWorktreeDir)
+		baseDir = DefaultBaseDir()
 	}
 	return &Manager{
 		baseDir: baseDir,
