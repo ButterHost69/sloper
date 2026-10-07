@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ButterHost69/sloper/internal/models"
+	"github.com/ButterHost69/sloper/internal/sessions"
 	"github.com/ButterHost69/sloper/internal/storage"
 	"github.com/ButterHost69/sloper/internal/version"
 	"github.com/ButterHost69/sloper/internal/worktree"
@@ -24,13 +25,16 @@ import (
 // It exposes read-only JSON endpoints over the local sloper sqlite database.
 // The Next.js dashboard connects to one or more of these servers.
 type webServer struct {
-	db          *storage.Repositories
-	start       time.Time
-	repo        string
-	gitURL      string
-	env         map[string]string
-	token       string
-	worktreeDir string
+	db           *storage.Repositories
+	start        time.Time
+	repo         string
+	gitURL       string
+	env          map[string]string
+	token        string
+	worktreeDir  string
+	sessionDir   string
+	sessions     sessionLocator
+	sessionCache *sessions.Cache
 }
 
 func main() {
@@ -64,12 +68,14 @@ func main() {
 	}
 
 	s := &webServer{
-		db:          storage.NewRepositories(db),
-		start:       time.Now(),
-		repo:        envOr("SLOPER_REPO", detectRepoFromGit()),
-		env:         safeEnv(),
-		token:       os.Getenv("SLOPER_WEB_TOKEN"),
-		worktreeDir: worktreeDir(),
+		db:           storage.NewRepositories(db),
+		start:        time.Now(),
+		repo:         envOr("SLOPER_REPO", detectRepoFromGit()),
+		env:          safeEnv(),
+		token:        os.Getenv("SLOPER_WEB_TOKEN"),
+		worktreeDir:  worktreeDir(),
+		sessionDir:   sessionDir(),
+		sessionCache: sessions.NewCache(),
 	}
 	s.gitURL = detectRepoURL()
 
@@ -111,6 +117,9 @@ func (s *webServer) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/issues/{number}/events", s.handleIssueEvents)
 	mux.HandleFunc("GET /api/pulls", s.handlePulls)
 	mux.HandleFunc("GET /api/worktrees", s.handleWorktrees)
+	mux.HandleFunc("GET /api/sessions", s.handleSessions)
+	mux.HandleFunc("GET /api/sessions/{id}", s.handleSessionDetail)
+	mux.HandleFunc("GET /api/sessions/{id}/events", s.handleSessionEvents)
 	mux.HandleFunc("GET /api/runs", s.handleRuns)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("GET /api/metrics/activity", s.handleActivity)
