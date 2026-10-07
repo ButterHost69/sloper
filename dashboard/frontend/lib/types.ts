@@ -183,3 +183,187 @@ export interface WorktreesResponse {
   /** Issues that still have unmerged work, live or not. */
   open: Worktree[];
 }
+
+// ─── Agent sessions (pi transcripts) ─────────────────────────────────
+
+export interface SessionToolRef {
+  id: string;
+  name: string;
+  preview?: string;
+  status: 'pending' | 'ok' | 'error' | string;
+}
+
+/** What the newest entry says the worker is doing right now. */
+export interface SessionCurrent {
+  kind: 'starting' | 'waiting' | 'thinking' | 'tool' | 'error' | string;
+  text?: string;
+  since?: string;
+  tools?: SessionToolRef[];
+}
+
+export interface SessionSummary {
+  title?: string;
+  model?: string;
+  provider?: string;
+  messages: number;
+  user_messages: number;
+  assistant_messages: number;
+  tool_results: number;
+  tool_calls: number;
+  tool_errors: number;
+  thinking_chars: number;
+  output_chars: number;
+  total_tokens: number;
+  cost_usd: number;
+  compactions: number;
+  started_at?: string;
+  last_entry_at?: string;
+  last_text?: string;
+  current?: SessionCurrent | null;
+  tools?: SessionToolRef[] | null;
+}
+
+export interface SessionRun {
+  id: number;
+  stage: string;
+  status: string;
+  started_at: string;
+  ended_at: string;
+  error_message?: string;
+  duration_ms?: number;
+}
+
+export interface SessionPR {
+  number: number;
+  state: string;
+  review_state?: string;
+  url?: string;
+}
+
+export interface Session {
+  id: string;
+  file: string;
+  issue_number: number;
+  stage?: string;
+  fix_iteration?: number;
+  size_bytes: number;
+  modified_at: string;
+  started_at?: string;
+  last_entry_at?: string;
+  age_seconds: number;
+  live: boolean;
+  summary: SessionSummary;
+  run?: SessionRun | null;
+  pr?: SessionPR | null;
+  issue_title?: string;
+  issue_state?: string;
+  issue_stage?: string;
+  branch_name?: string;
+}
+
+export interface SessionGroup {
+  issue_number: number;
+  title?: string;
+  state?: string;
+  stage?: string;
+  branch_name?: string;
+  pr?: SessionPR | null;
+  sessions: Session[];
+  live_count: number;
+  updated_at?: string;
+  unscoped?: boolean;
+}
+
+export interface SessionsResponse {
+  dir: string;
+  groups: SessionGroup[];
+  sessions: Session[];
+  count: number;
+  live_count: number;
+  generated_at: string;
+}
+
+export interface SessionUsage {
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  reasoning?: number;
+  totalTokens?: number;
+  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number };
+}
+
+export interface SessionContentPart {
+  type: string;
+  text?: string;
+  thinking?: string;
+  id?: string;
+  name?: string;
+  arguments?: Record<string, unknown>;
+  mimeType?: string;
+  data?: string;
+}
+
+export interface SessionMessage {
+  role: string;
+  content?: SessionContentPart[];
+  provider?: string;
+  model?: string;
+  usage?: SessionUsage;
+  stopReason?: string;
+  errorMessage?: string;
+  toolCallId?: string;
+  toolName?: string;
+  isError?: boolean;
+  timestamp?: number;
+  /** bashExecution messages carry the command and its captured output. */
+  command?: string;
+  output?: string;
+  exitCode?: number;
+  cancelled?: boolean;
+  truncated?: boolean;
+}
+
+/** One JSONL line of a pi session file, normalized by the API. */
+export interface SessionEntry {
+  type: string;
+  id?: string;
+  parent_id?: string;
+  timestamp?: string;
+  message?: SessionMessage;
+  provider?: string;
+  model_id?: string;
+  level?: string;
+  summary?: string;
+  name?: string;
+  label?: string;
+  target_id?: string;
+  custom_type?: string;
+  from_id?: string;
+  raw?: unknown;
+}
+
+export interface SessionDetail {
+  session: Session;
+  entries: SessionEntry[];
+  start_offset: number;
+  next_offset: number;
+  has_more_before: boolean;
+  size_bytes: number;
+  modified_at: string;
+  live: boolean;
+  skipped?: number;
+}
+
+export interface SessionEventsResponse {
+  entries: SessionEntry[];
+  start_offset: number;
+  next_offset: number;
+  reset: boolean;
+  has_more: boolean;
+  has_more_before: boolean;
+  size_bytes: number;
+  modified_at: string;
+  live: boolean;
+  skipped?: number;
+}

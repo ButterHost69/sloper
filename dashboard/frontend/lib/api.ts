@@ -8,6 +8,9 @@ import type {
   PullRecord,
   RepoInfo,
   RunRecord,
+  SessionDetail,
+  SessionEventsResponse,
+  SessionsResponse,
   Summary,
   WorktreesResponse,
 } from './types';
@@ -89,6 +92,29 @@ export const api = {
       `/api/pulls?limit=${limit}&offset=${offset}${beforeNumber ? `&before_number=${beforeNumber}` : ''}`,
     ),
   worktrees: (base: string) => request<WorktreesResponse>(base, '/api/worktrees', 6000),
+  sessions: (base: string) => request<SessionsResponse>(base, '/api/sessions', 12000),
+  session: (base: string, id: string, limit = 400) =>
+    request<SessionDetail>(
+      base,
+      `/api/sessions/${encodeURIComponent(id)}?limit=${limit}`,
+      12000,
+    ),
+  sessionEvents: (
+    base: string,
+    id: string,
+    params: { offset?: number; before?: number; limit?: number } = {},
+  ) => {
+    const sp = new URLSearchParams();
+    if (params.offset !== undefined) sp.set('offset', String(params.offset));
+    if (params.before !== undefined) sp.set('before', String(params.before));
+    if (params.limit !== undefined) sp.set('limit', String(params.limit));
+    const qs = sp.toString();
+    return request<SessionEventsResponse>(
+      base,
+      `/api/sessions/${encodeURIComponent(id)}/events${qs ? `?${qs}` : ''}`,
+      12000,
+    );
+  },
   activity: (base: string, hours = 24) =>
     request<{ hours: number; buckets: ActivityBucket[] }>(base, `/api/metrics/activity?hours=${hours}`),
   events: (base: string, limit = 300, offset = 0, beforeId?: number) =>

@@ -21,6 +21,19 @@ token to the instance in the console UI.
 > After changing the Go source (e.g. `app/web/main.go`), rebuild the image with
 > `make docker` — the binaries are baked into the image via the `Dockerfile`.
 
+## Agent session transcripts
+
+The console's **Sessions** view reads the pi session files the workers write to
+`$HOME/.sloper/sessions`, which lives inside the `sloper_data` volume that is
+already mounted at `/root/.sloper`. `sloper-web` therefore needs no extra mount;
+`SLOPER_SESSION_DIR` (default `/root/.sloper/sessions`, set in `compose.yml`)
+only has to change when the API server and the workers do not share a home
+directory.
+
+Each stage gets a deterministic pi session id (`sloper-issue-42-work`), so the
+file name alone tells the console which issue, stage, and pull request a
+transcript belongs to.
+
 ## Browser tools for pi workers
 
 The image ships `pi-mcp-adapter` and a chrome-devtools MCP server config

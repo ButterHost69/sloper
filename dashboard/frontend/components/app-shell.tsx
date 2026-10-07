@@ -17,6 +17,7 @@ import {
   Menu,
   Moon,
   Plus,
+  Radio,
   RefreshCw,
   ScrollText,
   Server,
@@ -63,6 +64,7 @@ const NAV_GROUPS: Array<{
     label: 'Monitor',
     items: [
       { href: '/', label: 'Overview', icon: LayoutDashboard },
+      { href: '/sessions', label: 'Sessions', icon: Radio },
       { href: '/issues', label: 'Issues', icon: ListChecks },
       { href: '/pulls', label: 'Pull requests', icon: GitPullRequest },
       { href: '/runs', label: 'Runs', icon: Activity },
@@ -84,6 +86,8 @@ function isActivePath(pathname: string, href: string): boolean {
 }
 
 function pageMeta(pathname: string): { section: string; title: string } {
+  if (/^\/sessions\/.+/.test(pathname)) return { section: 'Monitor', title: 'Session transcript' };
+  if (pathname.startsWith('/sessions')) return { section: 'Monitor', title: 'Sessions' };
   if (/^\/issues\/\d+/.test(pathname)) return { section: 'Issues', title: 'Issue detail' };
   if (pathname.startsWith('/issues')) return { section: 'Monitor', title: 'Issues' };
   if (pathname.startsWith('/pulls')) return { section: 'Monitor', title: 'Pull requests' };
