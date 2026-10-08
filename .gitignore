@@ -1,3 +1,4 @@
 .env
 dist/
 .playwright-mcp/
+.pre-pr/
