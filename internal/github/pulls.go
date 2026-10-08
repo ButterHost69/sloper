@@ -23,6 +23,8 @@ type PRInfo struct {
 	IsDraft     bool
 	Author      string
 	UpdatedAt   string
+	MergedAt    string
+	IsMerged    bool
 	Mergeable   string
 	ReviewState string
 }
@@ -84,6 +86,8 @@ func (g *GithubGateway) GetPR(ctx context.Context, repo string, prNumber int64) 
 		IsDraft:   row["draft"] != nil && row["draft"] == true,
 		Author:    extractAuthor(firstNonNil(row["user"], row["author"])),
 		UpdatedAt: utils.FirstNonEmpty(utils.AsString(row["updated_at"]), utils.AsString(row["updatedAt"])),
+		MergedAt:  utils.FirstNonEmpty(utils.AsString(row["merged_at"]), utils.AsString(row["mergedAt"])),
+		IsMerged:  row["merged"] != nil && row["merged"] == true,
 	}, nil
 }
 

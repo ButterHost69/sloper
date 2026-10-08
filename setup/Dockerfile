@@ -60,12 +60,16 @@ RUN set -e; . "$NVM_DIR/nvm.sh"; \
 
 COPY ./script.sh ./setup.sh
 COPY ./sloper /usr/local/bin/sloper
+COPY ./sloper-web /usr/local/bin/sloper-web
 COPY ./skills/ /root/.pi/agent/skills/
 COPY ./pi-mcp.json /root/.pi/agent/mcp.json
 
 RUN mkdir -p ~/repo
 RUN chmod +x /setup.sh
 RUN chmod +x /usr/local/bin/sloper
+RUN chmod +x /usr/local/bin/sloper-web
+
+EXPOSE 8080
 
 ENTRYPOINT ["bash", "/setup.sh"]
 CMD []
