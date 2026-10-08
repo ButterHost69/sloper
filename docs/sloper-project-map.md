@@ -14,6 +14,12 @@ Everything below renders on github.com. Diagrams 10 and 12 were split after
 validation (into 10a/10b and 12a/12b) and 11 was trimmed, purely because
 GitHub's renderer gave up on the larger versions; no claims changed.
 
+> **If you edit a diagram:** GitHub's Mermaid is older and stricter than the
+> renderer in most editors. It rejects a semicolon inside a sequence-diagram
+> message (it is a statement separator) and a colon inside a state-diagram
+> transition label. All 24 diagrams here parse clean under both `mermaid@10.9.1`
+> and `mermaid@11.17.2`; keep it that way if you touch them.
+
 | # | Diagram | Type | Covers |
 | --- | --- | --- | --- |
 | 1 | System context | flowchart LR | Every process, store and external service |
@@ -757,7 +763,7 @@ stateDiagram-v2
     Absent --> FixTree : CreateWithBranch branch_fix
     FixTree --> FixTree : fetch origin branch, reset --hard origin/branch
     FixTree --> FixTree : agent edits, CommitAll
-    FixTree --> Pushed : push origin HEAD:branch
+    FixTree --> Pushed : push origin HEAD to the PR branch
     FixTree --> Absent : defer Remove(--force)
 
     Absent --> Absent : startup CleanupAll — remove every worktree under baseDir, prune, delete leftovers
