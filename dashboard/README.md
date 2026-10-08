@@ -34,6 +34,8 @@ The console uses a restrained Apple-inspired Liquid Glass system: solid pale neu
 | Route          | What it shows                                                        |
 | -------------- | -------------------------------------------------------------------- |
 | `/`            | Aggregate stats, pipeline funnel, failures, runs, and live activity   |
+| `/sessions`    | Live pi transcripts grouped by issue or pull request                 |
+| `/sessions/[id]` | Read-only transcript: prompts, thinking, tool calls, results        |
 | `/issues`      | Searchable/filterable issue table, click through to detail           |
 | `/issues/[id]` | Pipeline DAG, spec analysis, runs timeline, comments, event timeline |
 | `/pulls`       | PR board grouped by GitHub state with agent review status             |
@@ -41,6 +43,27 @@ The console uses a restrained Apple-inspired Liquid Glass system: solid pale neu
 | `/events`      | Hourly activity chart and filterable audit log stream                 |
 | `/instances`   | Manage multiple sloper instances + health probes                     |
 | `/roadmap`     | Clearly labeled previews of planned loops, runners, and extensions    |
+
+## Sessions
+
+The **Sessions** view tails the pi session files the workers write inside their
+container (`~/.sloper/sessions`, served read-only by `sloper-web` through
+`GET /api/sessions`, `/api/sessions/{id}` and `/api/sessions/{id}/events`).
+There is no chat input: the console shows what a worker is doing, it never
+sends anything back.
+
+Because the file name carries sloper's deterministic session id
+(`<timestamp>_sloper-issue-42-work.jsonl`), sessions are grouped by issue and by
+the pull request that issue produced without any extra bookkeeping. The newest
+entry decides the "current activity" line — an assistant message with a tool
+call and no matching result means that tool is running right now.
+
+pi writes an entry only when a step completes, so the transcript trails the
+worker by the duration of its current step (a long `bash` call shows nothing
+until it returns), and the file itself appears only after the first model
+response. Transcripts disappear from the view when sloper deletes them: on
+`/sloper approve` (spec session), on `/sloper abort`, and when the pull request
+closes.
 
 ## Worktrees
 

@@ -27,6 +27,7 @@ gh auth setup-git
 # The container must bind 0.0.0.0 so the host-published port is reachable.
 echo "== Starting Sloper Web API =="
 SLOPER_DB_PATH="${SLOPER_DB_PATH:-$HOME/.sloper/sloper.sqlite}" \
+SLOPER_SESSION_DIR="${SLOPER_SESSION_DIR:-$HOME/.sloper/sessions}" \
 SLOPER_WEB_PORT="${SLOPER_WEB_PORT:-8080}" \
 SLOPER_WEB_ADDR="${SLOPER_WEB_ADDR:-0.0.0.0}" \
 SLOPER_REPO="${SLOPER_REPO:-$(basename "$GH_REPO_LINK" .git)}" \

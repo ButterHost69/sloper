@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -117,6 +118,60 @@ func (r *Repositories) ListIssuesFiltered(ctx context.Context, limit, offset int
 			return nil, fmt.Errorf("storage: scan issue: %w", err)
 		}
 		out = append(out, *rec)
+	}
+	return out, rows.Err()
+}
+
+// SessionIssue is the issue/PR metadata the sessions view joins onto a
+// session file name.
+type SessionIssue struct {
+	Number        int64  `json:"number"`
+	Title         string `json:"title"`
+	State         string `json:"state"`
+	Stage         string `json:"stage"`
+	BranchName    string `json:"branch_name"`
+	PRNumber      int64  `json:"pr_number"`
+	PRState       string `json:"pr_state"`
+	PRReviewState string `json:"pr_review_state"`
+	PRURL         string `json:"pr_url"`
+	PRMergedAt    string `json:"pr_merged_at"`
+}
+
+// GetSessionIssues returns issue metadata (plus any linked pull request) for
+// the given issue numbers, keyed by issue number.
+func (r *Repositories) GetSessionIssues(ctx context.Context, numbers []int64) (map[int64]SessionIssue, error) {
+	out := make(map[int64]SessionIssue, len(numbers))
+	if len(numbers) == 0 {
+		return out, nil
+	}
+
+	placeholders := make([]string, 0, len(numbers))
+	args := make([]any, 0, len(numbers))
+	for _, number := range numbers {
+		placeholders = append(placeholders, "?")
+		args = append(args, number)
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT i.number, i.title, i.state, i.stage, COALESCE(i.branch_name, ''),
+		       COALESCE(i.pr_number, 0),
+		       COALESCE(p.state, ''), COALESCE(p.review_state, ''), COALESCE(p.url, ''),
+		       COALESCE(p.merged_at, '')
+		FROM issues i
+		LEFT JOIN pull_requests p ON p.number = i.pr_number
+		WHERE i.number IN (`+strings.Join(placeholders, ",")+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: get session issues: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var rec SessionIssue
+		if err := rows.Scan(&rec.Number, &rec.Title, &rec.State, &rec.Stage, &rec.BranchName,
+			&rec.PRNumber, &rec.PRState, &rec.PRReviewState, &rec.PRURL, &rec.PRMergedAt); err != nil {
+			return nil, fmt.Errorf("storage: scan session issue: %w", err)
+		}
+		out[rec.Number] = rec
 	}
 	return out, rows.Err()
 }
@@ -292,6 +347,40 @@ func (r *Repositories) ListRunsByIssue(ctx context.Context, issueNumber int64) (
 			return nil, fmt.Errorf("storage: scan run: %w", err)
 		}
 		out = append(out, *rec)
+	}
+	return out, rows.Err()
+}
+
+// ListRunsByIssues returns the runs of several issues at once, keyed by issue
+// number, so the sessions list can pair many transcripts with one query.
+func (r *Repositories) ListRunsByIssues(ctx context.Context, numbers []int64) (map[int64][]RunRecord, error) {
+	out := make(map[int64][]RunRecord, len(numbers))
+	if len(numbers) == 0 {
+		return out, nil
+	}
+
+	placeholders := make([]string, 0, len(numbers))
+	args := make([]any, 0, len(numbers))
+	for _, number := range numbers {
+		placeholders = append(placeholders, "?")
+		args = append(args, number)
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+runColumns+`
+		FROM runs WHERE issue_number IN (`+strings.Join(placeholders, ",")+`)
+		ORDER BY id ASC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list runs by issues: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		rec, err := scanRun(rows)
+		if err != nil {
+			return nil, fmt.Errorf("storage: scan run: %w", err)
+		}
+		out[rec.IssueNumber] = append(out[rec.IssueNumber], *rec)
 	}
 	return out, rows.Err()
 }
