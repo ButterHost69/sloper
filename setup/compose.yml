@@ -15,6 +15,18 @@ services:
       - sloper_data:/root/.sloper
       - sloper_repo:/root/repo
 
+  # Optional: public ingress via Cloudflare Tunnel (token from
+  # Zero Trust -> Networks -> Tunnels). Only starts with:
+  #   CLOUDFLARED_TOKEN=... sudo docker compose --profile tunnel up
+  # Hostnames are configured in the Cloudflare dashboard for token tunnels.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    depends_on:
+      - looper-service
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARED_TOKEN:-}"]
+    restart: unless-stopped
+
 volumes:
   sloper_data:
   sloper_repo:
