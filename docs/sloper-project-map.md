@@ -4,10 +4,15 @@ Sloper is a Go orchestrator that drives a coding agent (`pi`) over a GitHub repo
 it discovers issues, specs them, implements them in git worktrees, opens PRs,
 self-reviews them, fixes what the review found, and lets a human merge.
 
-This document maps every moving part. Each diagram is followed by the **ground
-truth** it encodes, so a reader (or a validation agent) can check the diagram
-against the source. A validation log at the end records, per diagram, what an
-independent agent understood from the diagram alone and whether that matches.
+This document maps every moving part in 24 diagrams across 22 sections. Each
+diagram is followed by the **ground truth** it encodes, so a reader (or a
+validation agent) can check the diagram against the source. A validation log at
+the end records, per diagram, what an independent agent understood from the
+diagram alone and whether that matches.
+
+Everything below renders on github.com. Diagrams 10 and 12 were split after
+validation (into 10a/10b and 12a/12b) and 11 was trimmed, purely because
+GitHub's renderer gave up on the larger versions; no claims changed.
 
 | # | Diagram | Type | Covers |
 | --- | --- | --- | --- |
@@ -20,9 +25,9 @@ independent agent understood from the diagram alone and whether that matches.
 | 7 | Stage pipeline + fix loop | flowchart LR | SPEC → WORK → REVIEW → FIX → merge |
 | 8 | Agent RPC session | sequenceDiagram | `pi --mode rpc` over stdio JSONL |
 | 9 | Agent output parsing | flowchart LR | Prompt → text → fenced JSON → struct |
-| 10 | Domain model | classDiagram | Structs that cross every boundary |
+| 10 | Domain model (10a + 10b) | classDiagram | Rows, stage results and read models |
 | 11 | Worktree lifecycle | stateDiagram-v2 | work / review / fix worktrees |
-| 12 | Git + GitHub command surface | flowchart LR | Every `gh` and `git` call, retries |
+| 12 | Git + GitHub surface (12a + 12b) | flowchart LR | Every `gh` and `git` call, retries and their absence |
 | 13 | SQLite schema | erDiagram | Tables, columns, foreign keys |
 | 14 | Runs & events ledger | flowchart LR | Crash recovery and the audit trail |
 | 15 | `sloper-web` API surface | mindmap | 16 read-only routes |
@@ -565,6 +570,12 @@ treated as an invalid review and fails the run rather than looping.
 
 ## 10. Domain model
 
+The domain is two layers: the rows that persist, and the in-memory results and
+read models built on top of them. They are split into two diagrams because the
+combined one was large enough that GitHub's Mermaid renderer refused it.
+
+### 10a. Persistence records — one class per table
+
 ```mermaid
 classDiagram
     class IssueRecord {
@@ -619,6 +630,20 @@ classDiagram
         +map Context
         +string CreatedAt
     }
+
+    IssueRecord "1" --> "*" CommentRecord : issue_number
+    IssueRecord "1" --> "*" RunRecord : issue_number
+    IssueRecord "1" --> "*" EventRecordFull : issue_number
+    IssueRecord "1" --> "0..1" PRRecord : pr_number
+    CommentRecord "*" --> "1" IssueRecord : issue_number
+    PRRecord "*" --> "1" IssueRecord : issue_number
+    EventRecordFull "*" --> "0..1" PRRecord : pr_number
+```
+
+### 10b. Stage results and read models
+
+```mermaid
+classDiagram
     class SpecResult {
         +string Summary
         +string[] FilesToChange
@@ -682,29 +707,24 @@ classDiagram
         +Current Current
     }
 
-    IssueRecord "1" --> "*" CommentRecord : issue_number
-    IssueRecord "1" --> "*" RunRecord : issue_number
-    IssueRecord "1" --> "*" EventRecordFull : issue_number
-    IssueRecord "1" --> "0..1" PRRecord : pr_number
     IssueRecord "1" --> "0..1" SpecResult : spec_json
     RunRecord "1" --> "1" StageOutput : agent_output
-    ReviewResult "1" --> "*" RunRecord : produced_by_fix
     File "1" --> "0..1" RunRecord : matchRun by stage and time
     File "1" --> "1" Summary : Summarize
+    ReviewResult "1" --> "*" RunRecord : produced_by_fix
     SessionIssue "1" --> "0..1" PRRecord : pr_number
     WorktreeIssue "1" --> "0..1" PRRecord : pr_number
-    CommentRecord "*" --> "1" IssueRecord : issue_number
-    PRRecord "*" --> "1" IssueRecord : issue_number
-    EventRecordFull "*" --> "0..1" PRRecord : pr_number
 ```
 
-*Reading this diagram: the label on each arrow is the join key or the embedded
-blob, not a business verb — `spec_json` is a JSON column, `agent_output` is the
-persisted text of a run, and `matchRun by stage and time` is a heuristic the web
-server applies because sessions are files, not rows. `ProcessCommentResult`,
-`WorkResult` and `ReviewResult` are in-memory stage outputs with no table of
-their own; their text ends up in `runs.agent_output` and their effect in the git
-state or the GitHub comment.*
+*Reading these two diagrams: the label on each arrow is the join key or the
+embedded blob, not a business verb — `spec_json` is a JSON column,
+`agent_output` is the persisted text of a run, and `matchRun by stage and time`
+is a heuristic the web server applies because sessions are files, not rows.
+`ProcessCommentResult`, `WorkResult` and `ReviewResult` are in-memory stage
+outputs with no table of their own; their text ends up in `runs.agent_output`
+and their effect in the git state or the GitHub comment. `IssueRecord`,
+`RunRecord` and `PRRecord` appear in both diagrams as the anchors the read
+models hang off.*
 
 **Ground truth.** `SpecResult` lives in two places: in memory in
 `internal/models`, and serialised into `issues.spec_json` (its `RawOutput` is
@@ -724,42 +744,32 @@ are not tables.
 ```mermaid
 stateDiagram-v2
     [*] --> Absent
-    Absent --> WorkTree : CreateWithBranch<br/>name sloper/issue-N-slug<br/>base = default branch
-    note right of WorkTree
-        path ~/.sloper/worktrees/sloper/issue-N-slug
-        branch created with -b, or reused when it exists
-        a stale directory is force-removed first
-    end note
+    Absent --> WorkTree : CreateWithBranch — sloper/issue-N-slug, base = default branch
     WorkTree --> WorkTree : agent edits, CommitAll if dirty
     WorkTree --> Pushed : git push -u origin branch
     Pushed --> Absent : defer Remove(--force) when the stage ends
 
-    Absent --> ReviewTree : CreateAtCommit<br/>name review-N-pr-M<br/>detached at PR head SHA
+    Absent --> ReviewTree : CreateAtCommit — review-N-pr-M, detached at the PR head SHA
     ReviewTree --> ReviewTree : agent reads, runs tests
     ReviewTree --> Absent : defer Remove(--force)
-    ReviewTree --> Exists : path already exists → error
+    ReviewTree --> Exists : path already exists, error
 
     Absent --> FixTree : CreateWithBranch branch_fix
-    FixTree --> FixTree : fetch origin branch,<br/>reset --hard origin/branch
+    FixTree --> FixTree : fetch origin branch, reset --hard origin/branch
     FixTree --> FixTree : agent edits, CommitAll
     FixTree --> Pushed : push origin HEAD:branch
     FixTree --> Absent : defer Remove(--force)
 
-    state Pushed {
-        [*] --> BranchOnOrigin
-    }
-
-    state Exists {
-        [*] --> Nothing
-    }
-
-    Absent --> Absent : startup CleanupAll:<br/>remove every worktree under baseDir,<br/>prune, delete leftover directories
+    Absent --> Absent : startup CleanupAll — remove every worktree under baseDir, prune, delete leftovers
 ```
 
 *Only `CreateAtCommit` errors when the path exists: `CreateWithBranch` force
 removes a stale directory first, which is why a crashed run can retry. The
 `Pushed` marker is a fact about the remote branch, not on-disk state — the
-worktree itself is still deleted by the stage's `defer`.*
+worktree itself is still deleted by the stage's `defer`. Worktrees live under
+`~/.sloper/worktrees`: work checkouts sit one level deeper
+(`sloper/issue-42-slug`, because the branch name contains a slash) while review
+checkouts are flat (`review-42-pr-118`).*
 
 **Ground truth.** The base directory is `~/.sloper/worktrees`
 (`worktree.DefaultBaseDir()`), overridable for the API server only via
@@ -778,52 +788,69 @@ an explicit comment questioning that duplication.
 
 ## 12. Git and GitHub command surface
 
+Split in two: the GitHub side is a `gh` subprocess per call with classification
+but **no retry**, the git side is a `git` subprocess per call with a real retry
+policy.
+
+### 12a. GitHub — every call is a `gh` subprocess
+
 ```mermaid
 flowchart LR
-    subgraph GHCLI["internal/github — every call is a gh subprocess"]
-        direction TB
-        GH1["issue list --state open --limit 30 --json ..."]
-        GH2["api repos/R/issues/N + api --paginate --slurp .../comments"]
-        GH3["issue comment N --body<br/>api POST comments with in_reply_to"]
-        GH4["issue edit N --add-label triaged"]
-        GH5["pr create --head branch --base main"]
-        GH6["api repos/R/pulls/N  (state, head.sha, merged_at)"]
-        GH7["pr diff N --repo R  (120s timeout)"]
-        GH8["pr comment N --body"]
-        GH9["pr merge N --squash --delete-branch<br/>DEFINED BUT NEVER CALLED"]
-    end
+    GH1["issue list --state open --limit 30 --json ..."]
+    GH2["api repos/R/issues/N<br/>+ api --paginate --slurp .../comments"]
+    GH3["issue comment N --body<br/>api POST comments with in_reply_to"]
+    GH4["issue edit N --add-label triaged"]
+    GH5["pr create --head branch --base main"]
+    GH6["api repos/R/pulls/N — state, head.sha, merged_at"]
+    GH7["pr diff N --repo R — 120s timeout"]
+    GH8["pr comment N --body"]
+    GH9["pr merge N --squash --delete-branch<br/>DEFINED BUT NEVER CALLED"]
 
-    subgraph WRAP["wrapping policy — classification only, no retry"]
-        TO["runGhWithTimeout:<br/>default 60s"]
-        TR["transient classification:<br/>tls handshake timeout, unexpected EOF,<br/>connection reset, 502/503/504,<br/>secondary rate limit"]
-        ERR["TransientError, IsTransientError,<br/>IsNotFoundError, ErrorMessage"]
-        NR["no retry anywhere on this side:<br/>a transient gh failure fails the stage<br/>and posts a failure comment"]
-    end
+    TO["runGhWithTimeout — default 60s"]
+    TR["transient classification: tls handshake timeout,<br/>unexpected EOF, connection reset,<br/>502/503/504, secondary rate limit"]
+    ERR["TransientError, IsTransientError,<br/>IsNotFoundError, ErrorMessage"]
+    NR["no retry on this side: a transient gh failure<br/>fails the stage and posts a failure comment"]
+    HUMAN["the human merges the PR on GitHub —<br/>sloper only reads the result"]
 
-    subgraph GITCLI["internal/git — every call is a git subprocess"]
-        direction TB
-        G1["worktree add -b / add (existing) / add --detach"]
-        G2["worktree remove --force, worktree prune, list --porcelain"]
-        G3["status --porcelain, add -A, commit -m"]
-        G4["push -u origin branch, push origin HEAD:branch"]
-        G5["fetch origin branch, fetch --all, reset --hard"]
-        G6["rev-parse HEAD, rev-list --count base..head,<br/>branch --list, symbolic-ref origin/HEAD"]
-        G7["config --get remote.origin.url → owner/repo"]
-        G8["diff base...head  (1 MiB capture)"]
-    end
+    GH1 --> TO
+    GH2 --> TO
+    GH3 --> TO
+    GH4 --> TO
+    GH5 --> TO
+    GH6 --> TO
+    GH7 --> TO
+    GH8 --> TO
+    GH9 -.-> HUMAN
+    TO --> TR --> ERR --> NR
+```
 
-    subgraph RETRY["retry policy"]
-        RP["DefaultGitRetryPolicy:<br/>3 attempts, 50ms base,<br/>exponential backoff + jitter, cap 500ms"]
-        PERM["permanent errors are not retried:<br/>already exists, not found, permission denied,<br/>authentication failed, does not match any"]
-        TRC["GitTrace hooks: OnStart / OnRetry / OnComplete"]
-    end
+### 12b. Git — every call is a `git` subprocess
 
-    GHCLI --> TO --> TR --> ERR --> NR
-    GITCLI --> RP
+```mermaid
+flowchart LR
+    G1["worktree add -b / add (existing) / add --detach"]
+    G2["worktree remove --force, worktree prune,<br/>list --porcelain"]
+    G3["status --porcelain, add -A, commit -m"]
+    G4["push -u origin branch, push origin HEAD:branch"]
+    G5["fetch origin branch, fetch --all, reset --hard"]
+    G6["rev-parse HEAD, rev-list --count base..head,<br/>branch --list, symbolic-ref origin/HEAD"]
+    G7["config --get remote.origin.url — owner/repo"]
+    G8["diff base...head — 1 MiB capture"]
+
+    RP["DefaultGitRetryPolicy — 3 attempts, 50ms base,<br/>exponential backoff + jitter, cap 500ms"]
+    PERM["permanent errors are not retried: already exists,<br/>not found, permission denied, authentication failed,<br/>does not match any"]
+    TRC["GitTrace hooks: OnStart / OnRetry / OnComplete"]
+
+    G1 --> RP
+    G2 --> RP
+    G3 --> RP
+    G4 --> RP
+    G5 --> RP
+    G6 --> RP
+    G7 --> RP
+    G8 --> RP
     RP --> PERM
     RP --> TRC
-    HUMAN["the human merges the PR on GitHub —<br/>sloper only reads the result"]
-    GH9 -.-> HUMAN
 ```
 
 **Ground truth.** Nothing in this project talks to the GitHub API directly:
@@ -1174,7 +1201,7 @@ sequenceDiagram
     loop while not gone, poll recursively
         H->>A: GET /api/sessions/{id}/events?offset=nextOffset&limit=500
         A->>F: ReadAfter(byte offset, limit)
-        F-->>A: only complete lines; a partial trailing line is left for the next poll
+        F-->>A: only complete lines — a partial trailing line is left for the next poll
         A-->>H: entries, next_offset, reset, live, skipped
         alt reset true (file rewritten)
             H->>H: reload from scratch (reloadKey++)
@@ -1605,6 +1632,12 @@ description was then checked against the ground truth in the source. Diagram
 text was corrected and re-rendered wherever the description exposed a real
 error. The table records the outcome; "questions" are things the validator
 flagged that are true of the system rather than faults in the diagram.
+
+Two changes came *after* this validation and are not reflected in the rows
+below: diagrams 10 and 12 were split and 11 was trimmed so that GitHub's Mermaid
+renderer would accept them (the source text was getting large; the claims are
+unchanged), and one sequence-diagram message in 17 lost a semicolon, which
+GitHub's parser treats as a statement separator.
 
 | # | Diagram | Understood correctly? | Errors found and fixed | Questions raised (answered in the ground truth) |
 | --- | --- | --- | --- | --- |
