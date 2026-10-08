@@ -20,6 +20,12 @@ GitHub's renderer gave up on the larger versions; no claims changed.
 > transition label. All 24 diagrams here parse clean under both `mermaid@10.9.1`
 > and `mermaid@11.17.2`; keep it that way if you touch them.
 
+> Scope note: this map covers the single-repo deployment. The repo controller
+> (`sloper-controller`, which runs one docker instance per attached repo) was
+> added afterwards and is documented in
+> [repo-controller.md](repo-controller.md); diagrams 1, 3, 10, 15 and 20 do not
+> include it yet.
+
 | # | Diagram | Type | Covers |
 | --- | --- | --- | --- |
 | 1 | System context | flowchart LR | Every process, store and external service |

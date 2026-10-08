@@ -1,4 +1,4 @@
-.PHONY: build-sloper format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean docker-clean-mem connect-docker evaluate-design pre-pr-diagrams
+.PHONY: build-sloper build-controller run-controller controller-e2e build-agent-image format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean docker-clean-mem connect-docker evaluate-design pre-pr-diagrams
 
 format-check:
 	gofmt -l .
@@ -8,6 +8,23 @@ lint:
 
 build-sloper:
 	go build -ldflags "$(go run ./tools/go-build-flags)" -o dist/sloper ./app/sloper
+
+# The repo controller: attach a repo link, get a container per repo.
+build-controller:
+	go build -ldflags "$(go run ./tools/go-build-flags)" -o dist/sloper-controller ./app/controller
+
+# Run the controller against the local docker daemon.
+run-controller: build-controller
+	./dist/sloper-controller
+
+# Smoke-test the attach -> container -> detach lifecycle (needs docker).
+controller-e2e:
+	./tools/controller-e2e.sh
+
+# Build the sloper image and tag it as the image the controller runs per repo
+# (SLOPER_IMAGE defaults to sloper-agent:latest).
+build-agent-image: build-docker
+	docker tag setup-looper-service sloper-agent:latest
 
 build-all:
 	go build -ldflags "$(go run ./tools/go-build-flags)" ./...

@@ -3,6 +3,15 @@
 Setups Sloper in a Docker Environment.
 Add GH Token & Repo Name in the .env file (rename the .env.example -> .env)
 
+This compose file runs **one repo**. To run several, attach them from the
+console instead: [`sloper-controller`](../docs/repo-controller.md) starts one
+container per attached repo from the same image, with its own port and volumes.
+
+```bash
+make build-agent-image   # this image, tagged sloper-agent:latest
+make run-controller      # then "New repo" in the console
+```
+
 Each container also runs the read-only **dashboard API** (`sloper-web`) on port
 `8080` so the [console](../dashboard/README.md) can observe the instance:
 
