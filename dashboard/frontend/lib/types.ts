@@ -367,3 +367,38 @@ export interface SessionEventsResponse {
   live: boolean;
   skipped?: number;
 }
+export interface ControllerHealth {
+  status: string;
+  version: string;
+  uptime_s: number;
+  time: string;
+  docker: string;
+  docker_error?: string;
+  image: string;
+  repos: number;
+  repos_by_state?: Record<string, number>;
+}
+
+/**
+ * One repo the controller runs a container for. `api_url` is that container's
+ * sloper-web base URL — the console registers it as an instance.
+ */
+export interface AttachedRepo {
+  id: number;
+  link: string;
+  name: string;
+  clone_url: string;
+  container_name: string;
+  container_id: string;
+  image: string;
+  host_port: number;
+  api_url: string;
+  token: string;
+  desired_state: 'running' | 'stopped' | string;
+  status: string;
+  status_message: string;
+  container_state: string;
+  restart_count: number;
+  attached_at: string;
+  updated_at: string;
+}
