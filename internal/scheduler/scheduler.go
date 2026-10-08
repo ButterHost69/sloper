@@ -205,7 +205,7 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 		log.Info("issue: new issue", zap.String("title", issue.Title), zap.String("phase", "triaging issue"))
 		// TODO: Look into this function more and look if it caches stuff properly
 
-		err := s.runSpecStage(ctx, issue, "")
+		err := s.runSpecStage(ctx, issue)
 		stage := models.StageSpecDone
 		if err != nil {
 			// Persist the failure so the issue isn't re-treated as brand-new
@@ -253,8 +253,7 @@ func (s *Scheduler) processOne(ctx context.Context, summary models.GithubIssueSu
 	}
 
 	// Check is last comment is a slash one and handle it
-	// - /sloper spec (respecs with the feedback) ;; REMAINING - NEED TO GIVE IT A DIFF PROCESS
-	// 											  ;; This should create a new spec - rn it is a feedback one.
+	// - /sloper spec (rewrites the spec from the entire conversation)
 	// - /sloper approve (start work stage)
 	// Check for slash commands from human unprocessed comments
 	if len(issue.Comments) == 0 {
@@ -399,20 +398,27 @@ func (s *Scheduler) processIssueComment(ctx context.Context, issue models.IssueD
 	return nil
 }
 
-func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, feedback string) error {
+func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail) error {
 	log := s.log.With(logger.WithIssue(issue.Number), logger.WithStage("spec"))
 
 	runID, _ := s.db.StartRun(ctx, issue.Number, "spec")
 
+	// Always hand the agent the stored spec, when there is one: /sloper spec
+	// must rewrite the whole conversation into a complete new spec.
+	previous := s.storedSpec(ctx, issue.Number)
+
 	log.Info("scheduler: starting SPEC stage",
-		zap.Bool("has_feedback", feedback != ""))
+		zap.Bool("has_previous_spec", previous != nil))
 	s.db.AppendEvent(ctx, storage.EventRecord{
 		IssueNumber: issue.Number,
 		EventType:   "spec.started",
 		Stage:       "spec",
 	})
 
-	spec, err := s.pl.SpecIssue(ctx, issue, feedback, s.specSessionID(issue.Number))
+	spec, err := s.pl.SpecIssue(ctx, issue, pipeline.SpecOptions{
+		SessionID: s.specSessionID(issue.Number),
+		Previous:  previous,
+	})
 	if err != nil {
 		s.db.FailRun(ctx, runID, err.Error())
 		s.db.AppendEvent(ctx, storage.EventRecord{
@@ -479,7 +485,7 @@ func (s *Scheduler) runSpecStage(ctx context.Context, issue models.IssueDetail, 
 		Message:     spec.Summary,
 	})
 
-	specComment := formatSpecComment(spec, issue.Number)
+	specComment := formatSpecComment(spec, issue.Number, previous != nil)
 	if err := s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number, specComment); err != nil {
 		return fmt.Errorf("publish spec comment: %w", err)
 	}
@@ -511,7 +517,7 @@ func (s *Scheduler) handleSlashCommand(
 
 		if !s.hasValidSpec(ctx, issue.Number) {
 			log.Info("scheduler: approve received but no valid spec, generating spec first")
-			if err := s.runSpecStage(ctx, issue, ""); err != nil {
+			if err := s.runSpecStage(ctx, issue); err != nil {
 				_ = s.db.MarkCommentProcessed(ctx, cmd.CommentID)
 				_ = s.db.UpdateIssueLastCommentID(ctx, issue.Number, maxCommentID(issue.Comments))
 				return fmt.Errorf("approve: generate spec: %w", err)
@@ -523,9 +529,9 @@ func (s *Scheduler) handleSlashCommand(
 			fmt.Sprintf("Plan approved by @%s. Starting implementation...", cmd.Author))
 		s.cleanupSpecSession(issue.Number)
 
-	// Right now spec and revise same
-	// Modify to the desired behavior - use all comments to create new spec.
-	// Remove Revise one
+	// /sloper spec (and its legacy alias /sloper revise) rewrites the spec from
+	// the entire conversation: runSpecStage passes the agent every comment plus
+	// the spec being replaced.
 	case slash.CmdSpec:
 		s.db.AppendEvent(ctx, storage.EventRecord{
 			IssueNumber: issue.Number,
@@ -534,20 +540,8 @@ func (s *Scheduler) handleSlashCommand(
 		})
 		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
 			fmt.Sprintf("Re-running spec analysis as requested by @%s...", cmd.Author))
-		if err := s.runSpecStage(ctx, issue, ""); err != nil {
+		if err := s.runSpecStage(ctx, issue); err != nil {
 			return fmt.Errorf("rerun spec: %w", err)
-		}
-
-	case slash.CmdRevise:
-		s.db.AppendEvent(ctx, storage.EventRecord{
-			IssueNumber: issue.Number,
-			EventType:   "revise.received",
-			Message:     fmt.Sprintf("revision requested by @%s: %s", cmd.Author, cmd.Feedback),
-		})
-		s.ghClient.PostIssueComment(ctx, s.RepoName, issue.Number,
-			fmt.Sprintf("Revising plan based on feedback from @%s...", cmd.Author))
-		if err := s.runSpecStage(ctx, issue, cmd.Feedback); err != nil {
-			return fmt.Errorf("revise spec: %w", err)
 		}
 
 	case slash.CmdAbort:
@@ -581,7 +575,7 @@ func (s *Scheduler) handleSlashCommand(
 		// Clear the failed state and re-run from scratch
 		s.transitionIssueStage(ctx, issue.Number, models.StageNew)
 		_ = s.db.UpdateIssueSpec(ctx, issue.Number, "")
-		if err := s.runSpecStage(ctx, issue, ""); err != nil {
+		if err := s.runSpecStage(ctx, issue); err != nil {
 			// runSpecStage already posted the failure comment. Mark the retry
 			// command as processed so a failed run doesn't auto-repeat every tick;
 			// recovery is user-driven via a new /sloper retry.
@@ -636,7 +630,7 @@ func (s *Scheduler) runWorkStage(ctx context.Context, rec storage.IssueRecord) e
 		if err != nil {
 			return fmt.Errorf("fetch issue for spec generation: %w", err)
 		}
-		if err := s.runSpecStage(ctx, issue, ""); err != nil {
+		if err := s.runSpecStage(ctx, issue); err != nil {
 			s.transitionIssueStage(ctx, rec.Number, models.StageFailed)
 			return fmt.Errorf("generate spec: %w", err)
 		}
@@ -1139,9 +1133,12 @@ func formatResponseComment(spec *models.ProcessCommentResult, issueNumber int64)
 	return b.String()
 }
 
-func formatSpecComment(spec *models.SpecResult, issueNumber int64) string {
+func formatSpecComment(spec *models.SpecResult, issueNumber int64, rewritten bool) string {
 	var b strings.Builder
 	b.WriteString("## Sloper Spec Analysis\n\n")
+	if rewritten {
+		b.WriteString("_Rewritten from the entire issue conversation; this supersedes the previous spec._\n\n")
+	}
 	b.WriteString(fmt.Sprintf("**Summary:** %s\n\n", spec.Summary))
 	b.WriteString("### Files to Change\n")
 	if len(spec.FilesToChange) > 0 {
@@ -1262,30 +1259,23 @@ func specIsComplete(spec *models.SpecResult) bool {
 		spec.ImplementationPlan != ""
 }
 
-// hasValidSpec reports whether the issue has a stored, complete spec.
-func (s *Scheduler) hasValidSpec(ctx context.Context, issueNumber int64) bool {
+// storedSpec returns the issue's stored spec, or nil when it has none (or the
+// stored one is incomplete).
+func (s *Scheduler) storedSpec(ctx context.Context, issueNumber int64) *models.SpecResult {
 	cached, err := s.db.GetIssue(ctx, issueNumber)
 	if err != nil || cached == nil {
-		return false
+		return nil
 	}
-	return specIsComplete(storage.ParseSpecJSON(cached.SpecJSON))
+	spec := storage.ParseSpecJSON(cached.SpecJSON)
+	if !specIsComplete(spec) {
+		return nil
+	}
+	return spec
 }
 
-func collectFeedbackFromCommentsExcludingBot(comments []models.CommentInfo, lastSeenID int64, botUser string) string {
-	var parts []string
-	for _, c := range comments {
-		if c.ID <= lastSeenID {
-			continue
-		}
-		if botUser != "" && c.Author == botUser {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("[%s] %s: %s", c.CreatedAt, c.Author, c.Body))
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.Join(parts, "\n\n---\n\n")
+// hasValidSpec reports whether the issue has a stored, complete spec.
+func (s *Scheduler) hasValidSpec(ctx context.Context, issueNumber int64) bool {
+	return s.storedSpec(ctx, issueNumber) != nil
 }
 
 func slugify(s string) string {

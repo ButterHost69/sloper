@@ -20,10 +20,21 @@ func New(ag *agent.AgentGateway) *Pipeline {
 
 // ─── Stage operations ───────────────────────────────────────────────
 
-// SpecIssue runs the SPEC stage: analyzes an issue and produces a plan.
-// feedback is optional — pass user feedback from /sloper revise when re-triaging.
-func (p *Pipeline) SpecIssue(ctx context.Context, issue models.IssueDetail, feedback, sessionID string) (*models.SpecResult, error) {
-	out, err := p.ag.RunStageWithCWD(ctx, buildSpecPrompt(issue, feedback), "", sessionID)
+// SpecOptions configures a SPEC run.
+type SpecOptions struct {
+	// SessionID resumes the issue's persistent spec session.
+	SessionID string
+	// Previous is the stored spec this run replaces, when one exists. The agent
+	// returns a complete, self-contained spec either way; Previous is context,
+	// never something to amend piecemeal.
+	Previous *models.SpecResult
+}
+
+// SpecIssue runs the SPEC stage: analyzes an issue and produces a complete
+// spec. The whole issue conversation is part of the prompt, and opts.Previous
+// makes the run a full rewrite of the spec it replaces.
+func (p *Pipeline) SpecIssue(ctx context.Context, issue models.IssueDetail, opts SpecOptions) (*models.SpecResult, error) {
+	out, err := p.ag.RunStageWithCWD(ctx, buildSpecPrompt(issue, opts), "", opts.SessionID)
 	if err != nil {
 		return nil, fmt.Errorf("spec: %w", err)
 	}

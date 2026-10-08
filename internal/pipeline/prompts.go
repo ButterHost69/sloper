@@ -31,27 +31,27 @@ Title: %s
 
 Labels: %s
 
-Comments:
-%s
+## Conversation
+Every comment on the issue, oldest first.  This is the full discussion: treat
+decisions, corrections and accepted proposals in it as part of the requirement.
 
-## Previous Feedback
 %s
-
+%s
 ## Task
 1. Use ls and find to understand the project structure.
-2. Use grep to search for code related to the issue (keywords from the title/body).
+2. Use grep to search for code related to the issue (keywords from the title,
+   body, and conversation).
 3. Read the relevant source files you discover.
 4. Identify the root cause (for bugs) or scope of change (for features).
 5. List every file that must be modified, with the specific changes needed.
 6. Write a detailed, step-by-step implementation plan with code-level
    specifics (function names, types, edge cases, new files to create).
-7. If there is previous feedback above, incorporate it into your revised plan.
 
 ## Output Format
 You MUST wrap your final answer in a fenced JSON block.  Do not output
 anything except the JSON block as your final message.
 
-` + "```json" + `{
+` + "```json\n" + `{
   "summary": "one-line summary of the issue and the proposed fix",
   "files_to_change": ["path/to/file1.go", "path/to/file2.go"],
   "implementation_plan": "detailed multi-paragraph plan describing exactly what changes to make in each file, including function signatures, edge cases, and test considerations"
@@ -60,11 +60,46 @@ anything except the JSON block as your final message.
 
 IMPORTANT:
 - Do NOT make any edits yet.  Only produce the specification.
+- The result is always a COMPLETE, self-contained spec, never a diff, changelog,
+  or partial amendment that only describes what changed.
 - The "summary" field must be a real description, not empty.
 - The "files_to_change" array must list actual file paths from the repo.
 - The "implementation_plan" must be detailed and reference real code.`
 
-func buildSpecPrompt(issue models.IssueDetail, feedback string) string {
+const specReplacementTemplate = `
+## Current Spec (being replaced)
+This issue already has a spec.  The conversation above may have changed it.
+Rewrite it completely: keep what is still correct, fold in every decision,
+correction and accepted proposal from the conversation, and drop what was
+superseded.  The spec you return must stand on its own — never refer back to
+this one and never describe changes relative to it.
+
+Summary: %s
+
+Files to change:
+%s
+
+Implementation plan:
+%s
+`
+
+// formatPreviousSpec renders the stored spec that a rerun is replacing.
+func formatPreviousSpec(spec *models.SpecResult) string {
+	files := "  (none)"
+	if len(spec.FilesToChange) > 0 {
+		lines := make([]string, len(spec.FilesToChange))
+		for i, f := range spec.FilesToChange {
+			lines[i] = fmt.Sprintf("- `%s`", f)
+		}
+		files = strings.Join(lines, "\n")
+	}
+	return fmt.Sprintf(specReplacementTemplate, spec.Summary, files, spec.ImplementationPlan)
+}
+
+// buildSpecPrompt assembles the SPEC prompt. The whole issue conversation is
+// always included; opts.Previous adds the spec being replaced so a rerun
+// rewrites it completely instead of amending it piecemeal.
+func buildSpecPrompt(issue models.IssueDetail, opts SpecOptions) string {
 	labels := "none"
 	if len(issue.Labels) > 0 {
 		labels = strings.Join(issue.Labels, ", ")
@@ -77,10 +112,11 @@ func buildSpecPrompt(issue models.IssueDetail, feedback string) string {
 		}
 		comments = strings.Join(parts, "\n\n---\n\n")
 	}
-	if feedback == "" {
-		feedback = "(none)"
+	replacement := ""
+	if opts.Previous != nil {
+		replacement = formatPreviousSpec(opts.Previous)
 	}
-	return fmt.Sprintf(specTemplate, issue.Title, issue.Body, labels, comments, feedback)
+	return fmt.Sprintf(specTemplate, issue.Title, issue.Body, labels, comments, replacement)
 }
 
 const processCommentTemplate = `You are an expert software engineer triaging a GitHub issue.

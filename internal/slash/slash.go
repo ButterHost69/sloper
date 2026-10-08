@@ -11,16 +11,17 @@ type CommandType string
 
 const (
 	CmdApprove CommandType = "approve"
-	CmdRevise  CommandType = "revise"
 	CmdAbort   CommandType = "abort"
 	CmdStatus  CommandType = "status"
 	CmdRetry   CommandType = "retry"
 	CmdSpec    CommandType = "spec"
+	// CmdRevise is a legacy alias for CmdSpec: the spec rewrite already folds in
+	// the whole conversation, so targeted feedback needs no separate path.
+	CmdRevise CommandType = "revise"
 )
 
 type Command struct {
 	Type      CommandType
-	Feedback  string
 	Author    string
 	CommentID int64
 	Body      string
@@ -46,27 +47,14 @@ func parseComment(c models.CommentInfo) *Command {
 	}
 
 	cmdType := CommandType(strings.ToLower(strings.TrimSpace(match[1])))
-	rest := strings.TrimSpace(match[2])
+	if cmdType == CmdRevise {
+		cmdType = CmdSpec
+	}
 
 	switch cmdType {
 	case CmdApprove, CmdAbort, CmdStatus, CmdRetry, CmdSpec:
 		return &Command{
 			Type:      cmdType,
-			Author:    c.Author,
-			CommentID: c.ID,
-			Body:      c.Body,
-		}
-	case CmdRevise:
-		feedback := rest
-		if feedback == "" {
-			feedback = strings.TrimSpace(strings.TrimPrefix(c.Body, match[0]))
-		}
-		if feedback == "" {
-			feedback = "(no specific feedback provided)"
-		}
-		return &Command{
-			Type:      cmdType,
-			Feedback:  feedback,
 			Author:    c.Author,
 			CommentID: c.ID,
 			Body:      c.Body,
