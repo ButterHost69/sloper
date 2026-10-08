@@ -1,4 +1,4 @@
-.PHONY: build-sloper format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean docker-clean-mem connect-docker evaluate-design
+.PHONY: build-sloper format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean docker-clean-mem connect-docker evaluate-design pre-pr-diagrams
 
 format-check:
 	gofmt -l .
@@ -67,3 +67,7 @@ evaluate-design:
 	cd dashboard/frontend && npm run evaluate:design
 
 dashboard: build-web build-dashboard
+
+# Pre-PR hook: build the before/after diagram prompts for this branch.
+pre-pr-diagrams:
+	./tools/pre-pr-diagrams.sh brief
