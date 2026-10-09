@@ -20,6 +20,14 @@ GitHub's renderer gave up on the larger versions; no claims changed.
 > transition label. All 24 diagrams here parse clean under both `mermaid@10.9.1`
 > and `mermaid@11.17.2`; keep it that way if you touch them.
 
+> Scope note: this map covers the sloper runtime — the scheduler, the pipeline,
+> the worktree manager and the console. The repo controller
+> (`sloper-controller`, which runs one docker instance per attached repo) has its
+> own document, [repo-controller.md](repo-controller.md); diagrams 1, 10, 15 and
+> 20 do not cover it, and diagram 3 covers both roles. Where a variable is named
+> below, `SLOPER_REPO_LINK` is the repo link the controller assigns to a
+> container.
+
 | # | Diagram | Type | Covers |
 | --- | --- | --- | --- |
 | 1 | System context | flowchart LR | Every process, store and external service |
@@ -237,50 +245,61 @@ flowchart LR
 
     subgraph DOCKERHOST["Docker host"]
         subgraph COMPOSE["docker compose (setup/compose.yml)"]
-            LS["service looper-service<br/>build setup/Dockerfile<br/>entrypoint /setup.sh"]
+            LS["service controller<br/>build setup/Dockerfile<br/>entrypoint sloper-controller"]
             CF["service cloudflared<br/>profiles: [tunnel] only"]
         end
-        VOL1[("volume sloper_data<br/>→ /root/.sloper")]
-        VOL2[("volume sloper_repo<br/>→ /root/repo")]
-        PORT["published ${SLOPER_WEB_PORT:-8080} → 8080"]
+        VOL1[("volume controller_data<br/>→ /root/.sloper (repo registry)")]
+        VOL2[("per-repo volumes<br/>sloper-data-*, sloper-repo-*")]
+        PORT["published repo ports<br/>SLOPER_PORT_RANGE → 8080"]
     end
 
-    subgraph INNER["inside looper-service"]
+    subgraph INNER["inside a repo container"]
         SETUP["script.sh, copied in as /setup.sh<br/>root's HOME is /root, so ~/repo == /root/repo<br/>git config, clone or reset repo,<br/>gh auth setup-git"]
         SW["sloper-web<br/>nohup, 0.0.0.0:8080"]
         SB["sloper<br/>copied to the repo root, runs in ~/repo"]
         PIB["pi 0.84.2 + pi-mcp-adapter<br/>chrome-devtools MCP headless"]
     end
 
-    BR -->|"http://host:8080"| PORT
+    LS -->|"docker run, one per attached repo"| INNER
+    LS --- VOL1
+    BR -->|"http://host:9090"| LS
+    BR -->|"http://host:port"| PORT
     PORT --> SW
     SETUP --> SW
     SETUP --> SB
     SB --> PIB
-    SB --- VOL1
-    SW --- VOL1
-    VOL2 --- SB
-    CF -.->|"optional public ingress"| PORT
+    SB --- VOL2
+    SW --- VOL2
+    CF -.->|"optional public ingress"| LS
 
-    ENVF[".env via env_file<br/>GH_TOKEN, GH_REPO_LINK, GH_USERNAME,<br/>GH_EMAIL, AGENT_MODEL, AGENT_KEY,<br/>AGENT_PROVIDER, CLOUDFLARED_TOKEN"] -.-> COMPOSE
+    ENVF[".env via env_file<br/>GH_TOKEN, GH_USERNAME,<br/>GH_EMAIL, AGENT_MODEL, AGENT_KEY,<br/>AGENT_PROVIDER, SLOPER_CONTROLLER_TOKEN,<br/>CLOUDFLARED_TOKEN"] -.-> COMPOSE
 
-    NOTE2["base image ubuntu:24.04 + node 24<br/>no healthcheck, no restart policy on looper-service"]
+    NOTE2["base image ubuntu:24.04 + node 24<br/>+ docker CLI for the controller<br/>no healthcheck anywhere"]
     NOTE2 -.-> INNER
 ```
 
 **Ground truth.** The image is `ubuntu:24.04` plus `gh` (official apt repo),
 Google Chrome (for the `chrome-devtools` MCP server), nvm + Node 24,
 `@earendil-works/pi-coding-agent@0.84.2` symlinked to `/usr/local/bin/pi`,
-`pi-mcp-adapter@2.26.1`, the skills copied to `/root/.pi/agent/skills/` and
-`pi-mcp.json` to `/root/.pi/agent/mcp.json`. `setup/script.sh` runs as the
-entrypoint: it sources nvm, sets git identity from `GH_USERNAME`/`GH_EMAIL`,
-clones `GH_REPO_LINK` into `~/repo` (or `git fetch --all` + `reset --hard
+`pi-mcp-adapter@2.26.1`, the skills copied to `/root/.pi/agent/skills/`,
+`pi-mcp.json` to `/root/.pi/agent/mcp.json`, and the docker CLI — the same image
+runs both roles below. `setup/compose.yml` starts one service, `controller`:
+`/usr/local/bin/sloper-controller`, the `/var/run/docker.sock` mount it drives,
+the `controller_data` volume at `/root/.sloper` (holding `controller.sqlite`),
+port 9090 published, `restart: unless-stopped`, and a required
+`SLOPER_CONTROLLER_TOKEN` because it binds `0.0.0.0`. Every attached repo
+becomes a container from the same image (`sloper-agent:latest`) with the image's
+default entrypoint, `setup/script.sh`: it sources nvm, sets git identity from
+`GH_USERNAME`/`GH_EMAIL`, clones the repo the controller assigned through
+`SLOPER_REPO_LINK` into `~/repo` (or `git fetch --all` + `reset --hard
 origin/HEAD` + `git clean -fd` when it already exists), runs `gh auth
 setup-git`, starts `sloper-web` with `nohup` bound to `0.0.0.0:8080`, then runs
-`sloper` in the foreground. Two named volumes (`sloper_data` → `/root/.sloper`,
-`sloper_repo` → `/root/repo`) keep the database, sessions and worktrees across
-restarts. `cloudflared` only starts under `--profile tunnel` and needs
-`CLOUDFLARED_TOKEN`. The console itself is *not* containerised — it is run
+`sloper` in the foreground. Two named volumes per repo
+(`sloper-data-<slug>-<hash>` → `/root/.sloper`, `sloper-repo-<slug>-<hash>` →
+`/root/repo`) keep the database, sessions, worktrees and clone across restarts,
+and the controller publishes each repo's 8080 on a host port from
+`SLOPER_PORT_RANGE`. `cloudflared` only starts under `--profile tunnel` and
+needs `CLOUDFLARED_TOKEN`. The console itself is *not* containerised — it is run
 separately (`make run-dashboard`, port 3000) and points at instance URLs.
 
 ---
@@ -1367,7 +1386,7 @@ flowchart LR
         E1["GH_TOKEN"]
         E2["GH_USERNAME"]
         E3["GH_EMAIL"]
-        E4["GH_REPO_LINK"]
+        E4["SLOPER_REPO_LINK<br/>(assigned per repo container)"]
         E5["AGENT_MODEL"]
         E6["AGENT_KEY"]
         E7["AGENT_PROVIDER"]
@@ -1639,11 +1658,13 @@ text was corrected and re-rendered wherever the description exposed a real
 error. The table records the outcome; "questions" are things the validator
 flagged that are true of the system rather than faults in the diagram.
 
-Two changes came *after* this validation and are not reflected in the rows
-below: diagrams 10 and 12 were split and 11 was trimmed so that GitHub's Mermaid
+Changes that came *after* this validation are not reflected in the rows below:
+diagrams 10 and 12 were split and 11 was trimmed so that GitHub's Mermaid
 renderer would accept them (the source text was getting large; the claims are
-unchanged), and one sequence-diagram message in 17 lost a semicolon, which
-GitHub's parser treats as a statement separator.
+unchanged), one sequence-diagram message in 17 lost a semicolon, which GitHub's
+parser treats as a statement separator, and diagrams 3 and 20 now cover the repo
+controller as well (the compose service is `controller`, the repo link is the
+per-container `SLOPER_REPO_LINK`, and the volumes are per repo).
 
 | # | Diagram | Understood correctly? | Errors found and fixed | Questions raised (answered in the ground truth) |
 | --- | --- | --- | --- | --- |
