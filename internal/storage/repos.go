@@ -44,8 +44,8 @@ const repoSelect = `
 	FROM repos`
 
 // InsertRepo stores a newly attached repo and returns its id. Attaching the
-// same link twice fails with ErrRepoLinkExists; the conflict is resolved by
-// SQLite rather than by a read-then-write in the caller.
+// same link twice fails with ErrRepoLinkExists, resolved by SQLite's
+// ON CONFLICT clause.
 func (r *Repositories) InsertRepo(ctx context.Context, rec RepoRecord) (int64, error) {
 	if strings.TrimSpace(rec.DesiredState) == "" {
 		rec.DesiredState = models.RepoDesiredRunning

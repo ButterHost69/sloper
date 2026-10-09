@@ -6,10 +6,10 @@ with its own clone, its own SQLite pipeline database, its own worktrees and its
 own dashboard API port. The console's **Repositories** page is a thin UI over
 the same API.
 
-Before this, one sloper deployment meant one repo: the repo came from
-`setup/.env`, was cloned by the container's entrypoint, and the port came from
-compose. That path is gone — the set of repos is data now (a `repos` table), and
-the controller reconciles containers against it.
+The set of repos is data — a `repos` table — and the controller reconciles
+containers against it. A deployment covers as many repos as are attached to it,
+each with its own clone, its own database, its own worktrees and its own
+dashboard port.
 
 ```mermaid
 flowchart LR
@@ -142,9 +142,9 @@ container appears on the next free port in `SLOPER_PORT_RANGE` (default
 `8080-8180`), and the console registers that address as an instance so you can
 switch to it or press **Open**.
 
-There is no `.env` setting that selects a repo. The controller assigns each repo
-container `SLOPER_REPO_LINK`, and `setup/script.sh` clones it; a container
-started without that variable exits at once.
+The controller assigns each repo container `SLOPER_REPO_LINK`, and
+`setup/script.sh` clones it; a container started without that variable exits at
+once. Running sloper in a checkout instead reads the repo from the git remote.
 
 ### Configuration
 

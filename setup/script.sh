@@ -1,7 +1,6 @@
 #!/bin/bash
-# Entrypoint for a repo container. sloper-controller starts one of these per
-# attached repo and assigns the repo through SLOPER_REPO_LINK; no .env file
-# selects a repo any more, so a container without that variable is a mistake.
+# Entrypoint for a repo container: sloper-controller starts one per attached
+# repo and assigns that repo through SLOPER_REPO_LINK.
 set -e
 
 # Source nvm so node/npm/pi are available

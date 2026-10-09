@@ -598,8 +598,8 @@ func TestReconcileUsesTheImageTheRowWasAttachedWith(t *testing.T) {
 		t.Fatalf("Attach: %v", err)
 	}
 
-	// The operator moves SLOPER_IMAGE on; the attached row still runs the old
-	// image, so that is the image the controller must check and pull.
+	// A row keeps the image it was attached with, whatever SLOPER_IMAGE says
+	// later: that is the image the controller must check and pull.
 	svc.opts.Image = "sloper-agent:v2"
 	fake.images["sloper-agent:v2"] = true
 
@@ -708,7 +708,8 @@ func TestDetachRemovesContainerAndPurgesVolumes(t *testing.T) {
 		t.Errorf("Get after detach = %v, want ErrRepoNotFound", err)
 	}
 
-	// Attaching again reuses the freed port and can purge the old volumes.
+	// Attaching again reuses the freed port; purging removes the volumes from
+	// the earlier attach.
 	again, err := svc.Attach(context.Background(), "owner/repo")
 	if err != nil {
 		t.Fatalf("re-Attach: %v", err)

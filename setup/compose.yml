@@ -1,4 +1,4 @@
-# sloper's backend stack: the repo controller, not a repo.
+# sloper's backend stack: the repo controller.
 #
 # `make docker` builds the image (setup/Dockerfile) and starts this service.
 # Repos are then attached through the controller — the console's "New repo"

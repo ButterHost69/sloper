@@ -650,8 +650,7 @@ func (s *Service) containerSpec(rec storage.RepoRecord) models.ContainerSpec {
 			env[k] = v
 		}
 	}
-	// The repo is assigned per container by the controller; it is never read
-	// from a .env file. setup/script.sh clones this link.
+	// The repo this container clones (setup/script.sh).
 	env["SLOPER_REPO_LINK"] = rec.Link
 	env["SLOPER_REPO"] = rec.Name
 	env["SLOPER_WEB_ADDR"] = "0.0.0.0"

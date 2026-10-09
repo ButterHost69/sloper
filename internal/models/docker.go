@@ -111,16 +111,16 @@ type AttachedRepo struct {
 	UpdatedAt      string `json:"updated_at"`
 }
 
-// ContainerLabel keys every controller-managed container carries. The values are
-// how the controller rediscovers its own containers after a restart.
+// ContainerLabel keys every controller-managed container carries, so the
+// controller can list its containers with docker ps.
 const (
 	LabelManaged = "sloper.managed"
 	LabelRepo    = "sloper.repo"
 	LabelPort    = "sloper.web.port"
 )
 
-// DefaultRepoContainerPort is the port sloper-web listens on inside every repo
-// container (setup/compose.yml sets the same value).
+// DefaultRepoContainerPort is the port sloper-web listens on inside a repo
+// container, and the port the controller publishes on the host.
 const DefaultRepoContainerPort = 8080
 
 // Slugify turns an arbitrary label into a docker-safe name fragment: lowercase

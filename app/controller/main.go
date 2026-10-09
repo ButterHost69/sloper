@@ -3,8 +3,8 @@
 // It is the only process that talks to the docker daemon: the console (or curl)
 // posts a repo link to it, and it records the repo, starts one container for it,
 // publishes that container's dashboard API on a host port, and keeps it alive.
-// Each repo container runs the same sloper + sloper-web pair as the single-repo
-// docker setup, so everything downstream (issues, pipeline, sessions) is
+// Each repo container runs the same sloper + sloper-web pair as any other sloper
+// deployment, so everything downstream (issues, pipeline, sessions) is
 // unchanged.
 package main
 

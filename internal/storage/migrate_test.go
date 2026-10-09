@@ -8,16 +8,14 @@ import (
 	"testing"
 )
 
-// TestMigrateWithConcurrentMigrators covers the case a repo container always
-// has: sloper and sloper-web start together against one fresh database
-// (setup/script.sh starts the API server, then the scheduler). Migration used
-// to check "is this version applied?" and then apply it, so the loser of that
-// race re-ran an ALTER TABLE and died with "duplicate column name", leaving the
-// container without a dashboard API.
+// TestMigrateWithConcurrentMigrators runs two migrators against one fresh
+// database — the state a repo container starts in, where sloper-web and sloper
+// migrate together (setup/script.sh starts the API server, then the scheduler).
+// Every migration must be applied once and recorded once.
 func TestMigrateWithConcurrentMigrators(t *testing.T) {
 	ctx := context.Background()
 
-	// Several rounds: the window is small, and one round can pass by luck.
+	// Repeat: one round can pass by luck.
 	for round := 0; round < 40; round++ {
 		path := filepath.Join(t.TempDir(), "sloper.sqlite")
 

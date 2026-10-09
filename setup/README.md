@@ -8,10 +8,10 @@ make docker                          # builds the image and starts the controlle
 # controller API is now reachable at http://localhost:9090/api/health
 ```
 
-The compose stack runs **`sloper-controller`**, not a repo. There is no repo in
-`.env`: attach repos through the controller — the console's **New repo** button,
-or `POST /api/repos` — and it starts one container per attached repo from the
-same image, each with its own host port and its own two volumes. See
+The compose stack runs **`sloper-controller`**. Attach repos through the
+controller — the console's **New repo** button, or `POST /api/repos` — and it
+starts one container per attached repo from the same image, each with its own
+host port and its own two volumes. See
 [docs/repo-controller.md](../docs/repo-controller.md) for the API, the lifecycle
 rules and every environment variable.
 
@@ -38,8 +38,8 @@ the background on `0.0.0.0:8080` and `sloper` in the foreground. Two named
 volumes per repo keep the clone (`/root/repo`) and the state — database,
 sessions, worktrees (`/root/.sloper`) — across restarts.
 
-Starting the image by hand without `SLOPER_REPO_LINK` fails immediately: a repo
-container is only ever created by the controller.
+A repo container is created by the controller, which assigns `SLOPER_REPO_LINK`;
+starting the image by hand without that variable fails immediately.
 
 ## Agent session transcripts
 

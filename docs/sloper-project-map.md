@@ -20,14 +20,13 @@ GitHub's renderer gave up on the larger versions; no claims changed.
 > transition label. All 24 diagrams here parse clean under both `mermaid@10.9.1`
 > and `mermaid@11.17.2`; keep it that way if you touch them.
 
-> Scope note: this map was drawn for the single-repo deployment and the repo
-> controller (`sloper-controller`, which runs one docker instance per attached
-> repo) is documented separately in [repo-controller.md](repo-controller.md).
-> Diagrams 1, 3, 10, 15 and 20 do not include the controller yet, and diagram 3
-> still draws the compose service as a repo container: `setup/compose.yml` now
-> runs the controller, which creates that container per attached repo. Where a
-> variable is named below, `SLOPER_REPO_LINK` is the repo link the controller
-> assigns to a container — nothing selects a repo through `.env` any more.
+> Scope note: this map covers the sloper runtime — the scheduler, the pipeline,
+> the worktree manager and the console. The repo controller
+> (`sloper-controller`, which runs one docker instance per attached repo) has its
+> own document, [repo-controller.md](repo-controller.md); diagrams 1, 10, 15 and
+> 20 do not cover it, and diagram 3 covers both roles. Where a variable is named
+> below, `SLOPER_REPO_LINK` is the repo link the controller assigns to a
+> container.
 
 | # | Diagram | Type | Covers |
 | --- | --- | --- | --- |
@@ -1663,10 +1662,9 @@ Changes that came *after* this validation are not reflected in the rows below:
 diagrams 10 and 12 were split and 11 was trimmed so that GitHub's Mermaid
 renderer would accept them (the source text was getting large; the claims are
 unchanged), one sequence-diagram message in 17 lost a semicolon, which GitHub's
-parser treats as a statement separator, and diagrams 3 and 20 were updated when
-the repo controller replaced the single-repo compose deployment (the compose
-service is now `controller`, the repo link is the per-container
-`SLOPER_REPO_LINK`, and the volumes are per repo).
+parser treats as a statement separator, and diagrams 3 and 20 now cover the repo
+controller as well (the compose service is `controller`, the repo link is the
+per-container `SLOPER_REPO_LINK`, and the volumes are per repo).
 
 | # | Diagram | Understood correctly? | Errors found and fixed | Questions raised (answered in the ground truth) |
 | --- | --- | --- | --- | --- |

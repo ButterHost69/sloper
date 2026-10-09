@@ -42,9 +42,8 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	for _, file := range files {
 		version := strings.TrimSuffix(file, ".sql")
 
-		// Cheap pre-check: an already-migrated database should not open a write
-		// transaction per migration. It is not the guard against concurrency —
-		// the claim below is.
+		// Fast path for an already-migrated database: no write transaction per
+		// migration.
 		var exists bool
 		err := db.QueryRowContext(ctx,
 			"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = ?)", version,
@@ -68,9 +67,9 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 
 		// Claim the version before applying it. Two sloper processes share one
 		// database inside a repo container (setup/script.sh starts sloper-web,
-		// then sloper), and both migrate: the INSERT takes SQLite's write lock,
-		// so a competing migrator waits here and then finds the row present
-		// instead of re-running an ALTER TABLE that is already applied.
+		// then sloper) and both migrate, so the claim takes SQLite's write
+		// lock: a competing migrator waits here and then finds the version
+		// taken.
 		claimed, err := claimMigration(ctx, tx, version)
 		if err != nil {
 			_ = tx.Rollback()
