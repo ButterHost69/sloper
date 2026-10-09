@@ -1,4 +1,4 @@
-.PHONY: build-sloper build-controller run-controller controller-e2e build-agent-image format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean docker-clean-mem connect-docker evaluate-design pre-pr-diagrams
+.PHONY: build-sloper build-controller run-controller controller-e2e format-check lint build-all build-docker launch-docker docker docker-up docker-down docker-clean docker-clean-mem connect-docker evaluate-design pre-pr-diagrams
 
 format-check:
 	gofmt -l .
@@ -21,17 +21,16 @@ run-controller: build-controller
 controller-e2e:
 	./tools/controller-e2e.sh
 
-# Build the sloper image and tag it as the image the controller runs per repo
-# (SLOPER_IMAGE defaults to sloper-agent:latest).
-build-agent-image: build-docker
-	docker tag setup-looper-service sloper-agent:latest
-
 build-all:
 	go build -ldflags "$(go run ./tools/go-build-flags)" ./...
 
+# Build every binary into setup/ and build the image the compose stack runs:
+# the controller, and one container per attached repo from the same image
+# (tagged sloper-agent:latest).
 build-docker:
 	go build -ldflags "$(go run ./tools/go-build-flags)" -o setup/sloper ./app/sloper
 	go build -ldflags "$(go run ./tools/go-build-flags)" -o setup/sloper-web ./app/web
+	go build -ldflags "$(go run ./tools/go-build-flags)" -o setup/sloper-controller ./app/controller
 	cd setup && sudo docker compose build
 
 launch-docker:
@@ -39,7 +38,7 @@ launch-docker:
 
 
 connect-docker:
-	cd setup && sudo docker compose exec looper-service bash
+	cd setup && sudo docker compose exec controller bash
 
 docker: build-docker launch-docker
 

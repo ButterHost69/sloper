@@ -6,9 +6,10 @@ with its own clone, its own SQLite pipeline database, its own worktrees and its
 own dashboard API port. The console's **Repositories** page is a thin UI over
 the same API.
 
-Before this, one sloper deployment meant one repo: `GH_REPO_LINK` was baked into
-the container and the port came from compose. Now the set of repos is data — a
-`repos` table — and the controller reconciles containers against it.
+Before this, one sloper deployment meant one repo: the repo came from
+`setup/.env`, was cloned by the container's entrypoint, and the port came from
+compose. That path is gone — the set of repos is data now (a `repos` table), and
+the controller reconciles containers against it.
 
 ```mermaid
 flowchart LR
@@ -111,26 +112,39 @@ attached, `404` unknown repo, `503` docker is unreachable.
 
 ## Running it
 
-On a host with the docker daemon and the sloper image:
+The compose stack *is* the controller, so the shortest path is:
 
 ```bash
-make build-agent-image   # builds sloper + sloper-web and tags sloper-agent:latest
+cp setup/.env.example setup/.env    # GH_TOKEN, GH_USERNAME/GH_EMAIL,
+                                    # AGENT_MODEL/AGENT_KEY, SLOPER_CONTROLLER_TOKEN
+make docker                         # builds the image, starts the controller on :9090
+```
+
+`make build-docker` builds `sloper`, `sloper-web` and `sloper-controller` into
+`setup/`, then `docker compose build` tags the image `sloper-agent:latest` — the
+same image repo containers run, so there is nothing extra to pull.
+
+To run the controller on the host instead (no socket mount, no image build
+needed for the controller itself):
+
+```bash
+make build-docker        # or: docker build -t sloper-agent:latest setup/
 export GH_TOKEN=$(gh auth token)
 export GH_USERNAME=your-bot
+export GH_EMAIL=you@example.com
 export AGENT_MODEL=anthropic/claude-sonnet-4-20250514
 export AGENT_KEY=...
 make run-controller      # sloper-controller on 127.0.0.1:9090
 ```
 
-`build-agent-image` is `make build-docker` plus
-`docker tag setup-looper-service sloper-agent:latest`, so the image the
-compose setup builds is the image the controller runs. If you build the image
-under another name, point `SLOPER_IMAGE` at it.
-
-Then open the console, **Repositories** → **New repo**, paste a link. The
+Either way, open the console, **Repositories** → **New repo**, paste a link. The
 container appears on the next free port in `SLOPER_PORT_RANGE` (default
 `8080-8180`), and the console registers that address as an instance so you can
 switch to it or press **Open**.
+
+There is no `.env` setting that selects a repo. The controller assigns each repo
+container `SLOPER_REPO_LINK`, and `setup/script.sh` clones it; a container
+started without that variable exits at once.
 
 ### Configuration
 

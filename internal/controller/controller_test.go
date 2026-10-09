@@ -290,8 +290,13 @@ func TestReconcileCreatesContainerFromRow(t *testing.T) {
 	if spec.Image != "sloper-agent:test" {
 		t.Errorf("image = %q", spec.Image)
 	}
-	if spec.Env["GH_REPO_LINK"] != "ButterHost69/sloper" {
-		t.Errorf("GH_REPO_LINK = %q", spec.Env["GH_REPO_LINK"])
+	if spec.Env["SLOPER_REPO_LINK"] != "ButterHost69/sloper" {
+		t.Errorf("SLOPER_REPO_LINK = %q", spec.Env["SLOPER_REPO_LINK"])
+	}
+	// The repo link is assigned per container, never configured through the
+	// controller's own environment.
+	if _, ok := spec.Env["GH_REPO_LINK"]; ok {
+		t.Error("GH_REPO_LINK leaked into the container environment")
 	}
 	if spec.Env["GH_TOKEN"] != "gh-token" || spec.Env["AGENT_MODEL"] != "anthropic/claude" {
 		t.Errorf("credentials were not inherited: %v", spec.Env)

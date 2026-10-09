@@ -163,7 +163,7 @@ VOLS_A=$(docker inspect --format '{{range .Mounts}}{{.Name}}:{{.Destination}} {{
 
 [ "$MANAGED_LABEL" = "true" ] || fail "sloper.managed label = $MANAGED_LABEL"
 [ "$LABEL_A" = "ButterHost69/sloper" ] || fail "sloper.repo label = $LABEL_A"
-echo "$ENV_A" | grep -q '^GH_REPO_LINK=ButterHost69/sloper$' || fail "GH_REPO_LINK missing in container A"
+echo "$ENV_A" | grep -q '^SLOPER_REPO_LINK=ButterHost69/sloper$' || fail "SLOPER_REPO_LINK missing in container A"
 echo "$ENV_A" | grep -q '^GH_TOKEN=e2e-dummy-token$' || fail "GH_TOKEN not inherited by container A"
 echo "$ENV_A" | grep -q '^AGENT_MODEL=anthropic/claude-e2e$' || fail "AGENT_MODEL not inherited by container A"
 echo "$ENV_A" | grep -q '^SLOPER_WEB_ADDR=0.0.0.0$' || fail "SLOPER_WEB_ADDR missing in container A"

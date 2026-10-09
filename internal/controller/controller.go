@@ -650,7 +650,9 @@ func (s *Service) containerSpec(rec storage.RepoRecord) models.ContainerSpec {
 			env[k] = v
 		}
 	}
-	env["GH_REPO_LINK"] = rec.Link
+	// The repo is assigned per container by the controller; it is never read
+	// from a .env file. setup/script.sh clones this link.
+	env["SLOPER_REPO_LINK"] = rec.Link
 	env["SLOPER_REPO"] = rec.Name
 	env["SLOPER_WEB_ADDR"] = "0.0.0.0"
 	env["SLOPER_WEB_PORT"] = strconv.Itoa(s.opts.ContainerPort)

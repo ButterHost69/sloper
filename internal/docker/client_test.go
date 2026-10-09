@@ -53,7 +53,7 @@ func TestRunBuildsFullCommand(t *testing.T) {
 		Name:  "sloper-repo-owner-repo-1",
 		Image: "sloper-agent:latest",
 		Env: map[string]string{
-			"GH_REPO_LINK":     "owner/repo",
+			"SLOPER_REPO_LINK": "owner/repo",
 			"SLOPER_WEB_PORT":  "8080",
 			"SLOPER_WEB_TOKEN": "tok",
 		},
@@ -80,7 +80,7 @@ func TestRunBuildsFullCommand(t *testing.T) {
 		"docker run -d --name sloper-repo-owner-repo-1",
 		"--restart unless-stopped",
 		"--label sloper.managed=true --label sloper.repo=owner/repo",
-		"--env GH_REPO_LINK=owner/repo",
+		"--env SLOPER_REPO_LINK=owner/repo",
 		"--env SLOPER_WEB_PORT=8080",
 		"--env SLOPER_WEB_TOKEN=tok",
 		"--publish 127.0.0.1:8081:8080",
