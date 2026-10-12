@@ -41,8 +41,20 @@ The console uses a restrained Apple-inspired Liquid Glass system: solid pale neu
 | `/pulls`       | PR board grouped by GitHub state with agent review status             |
 | `/runs`        | Filterable execution history with expandable agent output/thinking    |
 | `/events`      | Hourly activity chart and filterable audit log stream                 |
+| `/repos`       | Attach a repo link; the controller starts a docker instance for it     |
 | `/instances`   | Manage multiple sloper instances + health probes                     |
 | `/roadmap`     | Clearly labeled previews of planned loops, runners, and extensions    |
+
+## Repositories
+
+`/repos` is the one write path in the console: it talks to
+[`sloper-controller`](../docs/repo-controller.md), which creates one container
+per attached repo. **New repo** takes a link (`owner/repo` or a GitHub URL),
+attaches it, and shows the container's status, port and logs. The repo's own
+dashboard API is registered as an instance (without stealing the active one),
+so **Open** switches the console to that repo's issues, runs and sessions. The
+instance list defaults to `NEXT_PUBLIC_SLOPER_CONTROLLER_URL`
+(`http://localhost:9090`) and can be changed per browser on the page.
 
 ## Sessions
 

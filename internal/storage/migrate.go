@@ -42,6 +42,8 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	for _, file := range files {
 		version := strings.TrimSuffix(file, ".sql")
 
+		// Fast path for an already-migrated database: no write transaction per
+		// migration.
 		var exists bool
 		err := db.QueryRowContext(ctx,
 			"SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = ?)", version,
@@ -63,16 +65,25 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("storage: begin tx for %s: %w", version, err)
 		}
 
+		// Claim the version before applying it. Two sloper processes share one
+		// database inside a repo container (setup/script.sh starts sloper-web,
+		// then sloper) and both migrate, so the claim takes SQLite's write
+		// lock: a competing migrator waits here and then finds the version
+		// taken.
+		claimed, err := claimMigration(ctx, tx, version)
+		if err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("storage: record migration %s: %w", version, err)
+		}
+		if !claimed {
+			_ = tx.Rollback()
+			log.Debug("storage: migration applied by another process", logger.WithStage(version))
+			continue
+		}
+
 		if _, err := tx.ExecContext(ctx, string(content)); err != nil {
 			_ = tx.Rollback()
 			return fmt.Errorf("storage: exec migration %s: %w", version, err)
-		}
-
-		if _, err := tx.ExecContext(ctx,
-			"INSERT INTO schema_migrations (version) VALUES (?)", version,
-		); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("storage: record migration %s: %w", version, err)
 		}
 
 		if err := tx.Commit(); err != nil {
@@ -83,4 +94,20 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// claimMigration records the version inside tx and reports whether this process
+// won the claim. The claim and the migration body commit together, so a failed
+// migration leaves no claim behind and is retried on the next start.
+func claimMigration(ctx context.Context, tx *sql.Tx, version string) (bool, error) {
+	res, err := tx.ExecContext(ctx,
+		"INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)", version)
+	if err != nil {
+		return false, err
+	}
+	claimed, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return claimed > 0, nil
 }

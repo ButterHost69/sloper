@@ -7,6 +7,7 @@ import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import {
   Activity,
+  Boxes,
   Check,
   ChevronsUpDown,
   ChevronsLeft,
@@ -74,6 +75,7 @@ const NAV_GROUPS: Array<{
   {
     label: 'Workspace',
     items: [
+      { href: '/repos', label: 'Repositories', icon: Boxes },
       { href: '/instances', label: 'Instances', icon: Server },
       { href: '/roadmap', label: 'Roadmap', icon: Sparkles, planned: true },
     ],
@@ -93,6 +95,7 @@ function pageMeta(pathname: string): { section: string; title: string } {
   if (pathname.startsWith('/pulls')) return { section: 'Monitor', title: 'Pull requests' };
   if (pathname.startsWith('/runs')) return { section: 'Monitor', title: 'Runs' };
   if (pathname.startsWith('/events')) return { section: 'Monitor', title: 'Events' };
+  if (pathname.startsWith('/repos')) return { section: 'Workspace', title: 'Repositories' };
   if (pathname.startsWith('/instances')) return { section: 'Workspace', title: 'Instances' };
   if (pathname.startsWith('/roadmap')) return { section: 'Workspace', title: 'Roadmap' };
   return { section: 'Monitor', title: 'Overview' };

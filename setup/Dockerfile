@@ -18,6 +18,18 @@ RUN (type -p wget >/dev/null || ( apt update &&  apt install wget -y)) \
 	&&  apt update \
 	&&  apt install gh -y
 
+# Docker CLI: when sloper-controller runs from this image (setup/compose.yml
+# mounts /var/run/docker.sock) it drives the host daemon with the docker CLI to
+# start one container per attached repo. Only the CLI is installed here; the
+# daemon stays on the host.
+RUN install -m 0755 -d /etc/apt/keyrings \
+	&& curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
+	&& chmod a+r /etc/apt/keyrings/docker.asc \
+	&& echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list \
+	&& apt-get update \
+	&& apt-get install -y --no-install-recommends docker-ce-cli \
+	&& rm -rf /var/lib/apt/lists/*
+
 # Install Google Chrome for the chrome-devtools MCP server used by pi workers.
 RUN wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
 	&& apt-get update \
@@ -61,6 +73,7 @@ RUN set -e; . "$NVM_DIR/nvm.sh"; \
 COPY ./script.sh ./setup.sh
 COPY ./sloper /usr/local/bin/sloper
 COPY ./sloper-web /usr/local/bin/sloper-web
+COPY ./sloper-controller /usr/local/bin/sloper-controller
 COPY ./skills/ /root/.pi/agent/skills/
 COPY ./pi-mcp.json /root/.pi/agent/mcp.json
 
@@ -68,8 +81,13 @@ RUN mkdir -p ~/repo
 RUN chmod +x /setup.sh
 RUN chmod +x /usr/local/bin/sloper
 RUN chmod +x /usr/local/bin/sloper-web
+RUN chmod +x /usr/local/bin/sloper-controller
 
-EXPOSE 8080
+# 8080 is a repo instance's dashboard API; 9090 is the controller (compose
+# overrides the entrypoint to run it).
+EXPOSE 8080 9090
 
+# Default role: one attached repo. setup/compose.yml overrides this entrypoint
+# to run sloper-controller instead.
 ENTRYPOINT ["bash", "/setup.sh"]
 CMD []

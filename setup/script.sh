@@ -1,4 +1,6 @@
 #!/bin/bash
+# Entrypoint for a repo container: sloper-controller starts one per attached
+# repo and assigns that repo through SLOPER_REPO_LINK.
 set -e
 
 # Source nvm so node/npm/pi are available
@@ -6,6 +8,8 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
 echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+
+: "${SLOPER_REPO_LINK:?SLOPER_REPO_LINK is required - repos are attached through sloper-controller}"
 
 cd ~/repo
 git config --global user.name "$GH_USERNAME"
@@ -17,7 +21,7 @@ if [ -d ".git" ]; then
 	git reset --hard origin/HEAD 2>/dev/null || true
 	git clean -fd
 else
-	gh repo clone $GH_REPO_LINK .
+	gh repo clone "$SLOPER_REPO_LINK" .
 fi
 
 gh auth setup-git
@@ -30,7 +34,7 @@ SLOPER_DB_PATH="${SLOPER_DB_PATH:-$HOME/.sloper/sloper.sqlite}" \
 SLOPER_SESSION_DIR="${SLOPER_SESSION_DIR:-$HOME/.sloper/sessions}" \
 SLOPER_WEB_PORT="${SLOPER_WEB_PORT:-8080}" \
 SLOPER_WEB_ADDR="${SLOPER_WEB_ADDR:-0.0.0.0}" \
-SLOPER_REPO="${SLOPER_REPO:-$(basename "$GH_REPO_LINK" .git)}" \
+SLOPER_REPO="${SLOPER_REPO:-$(basename "$SLOPER_REPO_LINK" .git)}" \
 nohup sloper-web >/tmp/sloper-web.log 2>&1 &
 
 echo "== Starting Sloper =="

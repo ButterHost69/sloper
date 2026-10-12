@@ -28,7 +28,17 @@ interface InstanceContextValue {
   instances: Instance[];
   active: Instance | null;
   setActive: (id: string) => void;
-  addInstance: (name: string, url: string, token?: string) => Instance;
+  /**
+   * Registers an instance. It becomes active unless `activate: false` is
+   * passed — a repo attached on the Repositories page is registered but does
+   * not steal focus while its container is still starting.
+   */
+  addInstance: (
+    name: string,
+    url: string,
+    token?: string,
+    options?: { activate?: boolean },
+  ) => Instance;
   updateInstance: (id: string, patch: InstancePatch) => void;
   removeInstance: (id: string) => void;
 }
@@ -61,11 +71,13 @@ export function InstanceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addInstance = useCallback(
-    (name: string, url: string, token?: string) => {
+    (name: string, url: string, token?: string, options?: { activate?: boolean }) => {
       const inst: Instance = { id: makeId(), name, url: normalizeUrl(url), token: token || undefined };
       persist([...instances, inst]);
-      setActiveId(inst.id);
-      saveActiveInstanceId(inst.id);
+      if (options?.activate !== false) {
+        setActiveId(inst.id);
+        saveActiveInstanceId(inst.id);
+      }
       return inst;
     },
     [instances, persist],

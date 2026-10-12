@@ -628,7 +628,7 @@ func safeEnv() map[string]string {
 		"model":    os.Getenv("AGENT_MODEL"),
 		"provider": os.Getenv("AGENT_PROVIDER"),
 		"bot_user": os.Getenv("GH_USERNAME"),
-		"repo_env": os.Getenv("GH_REPO_LINK"),
+		"repo_env": os.Getenv("SLOPER_REPO_LINK"),
 	}
 }
 
